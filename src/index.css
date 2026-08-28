@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    background: #05070c;
+    color: #dbe6f2;
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', Consolas, monospace;
+    overflow: hidden;
+  }
+
+  /* Phaser injects its canvas here; the React HUD floats above it. */
+  #game-root canvas {
+    display: block;
+    image-rendering: pixelated;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0c1119;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1c2534;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2b384b;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-md border border-edge bg-panel/85 backdrop-blur-sm;
+  }
+
+  .panel-title {
+    @apply text-[10px] uppercase tracking-[0.18em] text-dim;
+  }
+
+  .btn {
+    @apply rounded border border-edge bg-panel px-2.5 py-1 text-[11px] text-slate-300
+           transition-colors hover:border-neon/60 hover:text-neon
+           disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-edge
+           disabled:hover:text-slate-300;
+  }
+
+  .btn-primary {
+    @apply rounded border border-neon/60 bg-neon/10 px-3 py-1.5 text-[11px] text-neon
+           transition-colors hover:bg-neon/20 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .btn-danger {
+    @apply rounded border border-alarm/50 bg-alarm/10 px-2.5 py-1 text-[11px] text-alarm
+           transition-colors hover:bg-alarm/20;
+  }
+
+  .field {
+    @apply w-full rounded border border-edge bg-ink px-2 py-1.5 text-[12px] text-slate-200
+           outline-none transition-colors focus:border-neon/70;
+  }
+
+  .field-label {
+    @apply mb-1 block text-[10px] uppercase tracking-[0.14em] text-dim;
+  }
+}

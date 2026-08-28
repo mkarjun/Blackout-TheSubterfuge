@@ -1,0 +1,188 @@
+# Blackout: The Subterfuge
+
+A 2D top-down stealth and social-deduction game set in a locked-down research lab.
+You are the infiltrator. Five people work this floor, they talk to each other, they
+remember what you told them, and they build their own theories about who is sabotaging
+the place. Your job is to make sure the theory they settle on is not you.
+
+Built with **Vite + React + Phaser 3 + Dexie**, with a **dual-layer NPC engine**: the
+bodies run locally at 60fps, and an optional LLM writes what comes out of their mouths.
+
+```bash
+npm install
+npm run dev      # http://localhost:5173
+```
+
+The dev server binds every interface, so anyone on the same network can join at
+`http://<your-lan-ip>:5173` - Vite prints the Network URL when it starts. On Windows,
+accept the firewall prompt for Node the first time.
+
+The game is fully playable with **no AI provider configured** - NPCs fall back to a
+local rule-based dialogue system. Connecting a model changes the writing, not the game.
+
+---
+
+## Controls
+
+| Key | Action |
+|-----|--------|
+| WASD / Arrows | Move |
+| Shift | Sneak - silent, and 38% harder to spot |
+| E | Interact / sabotage / pick up - press again to abort a job in progress |
+| F | Plant the evidence you are carrying |
+| H | Hack lights - facility-wide at a breaker panel, otherwise just this room |
+| Space | Talk to whoever is closest |
+| Esc | Close a conversation, then pause |
+
+**Exit** (top right, the pause overlay, or the end-of-run screen) saves and returns to
+the title screen; the run is then offered as **Resume last run**.
+
+**Win:** sabotage all three systems on the floor, then reach the exit.
+
+**Three floors**, picked from the title screen:
+| # | Level | Character |
+|---|-------|-----------|
+| 1 | Halden Institute | Rooms around a corridor ring. Short sightlines, two ways out of everywhere. |
+| 2 | Cryo Annex | One spine, one crossing. Fewer routes, denser cover, everyone funnels through the middle. |
+| 3 | Ardent Tower | Three long halls and a perimeter walkway. Almost nowhere to hide - kill the lights. |
+
+**Three difficulties** - Recruit, Operative, Ghost - which change vision range, how fast
+being watched condemns you, how quickly suspicion cools, the catch window, and how many
+convinced staff trigger a lockdown. Ghost is harder because it *notices* you, not
+because it wins footraces: no NPC on any setting outruns the player, and a test enforces
+that.
+**Lose:** let someone who is already sure it was you keep hands on you for a full
+second. You get a warning and they stagger when they grab - move and you are out of it.
+
+---
+
+## The dual-layer engine
+
+The design constraint was that a network round trip must never be able to stall a
+frame or freeze a body.
+
+**Physical layer** (`src/game/`) - runs every frame, entirely local:
+vision cones with DDA line-of-sight, grid A* pathfinding, an eight-state FSM driven by
+a behaviour tree, collisions, patrols, noise. This layer is the game.
+
+**Cognitive layer** (`src/game/systems/CognitiveEngine.js`) - runs on a timer, never in
+`update()`. When something happens, the NPC *immediately* reacts physically (turns,
+watches, investigates, raises the alarm) and a request is queued in the background. When
+a payload arrives - 200ms or 4s later, or never - it is folded in as dialogue, an
+emotion, and suspicion deltas. `action_intent` is treated as a nudge, not a command, so
+a stale answer cannot yank a body that has since been alerted by something closer.
+
+Scheduling: one in-flight request per NPC, two concurrent globally, per-NPC cooldowns,
+priority replacement of queued triggers, and a single 4-second wall-clock deadline
+spanning all retries. Past the deadline, the request aborts and the NPC uses the local
+fallback - which returns the *same schema*, so nothing downstream has two shapes to
+handle.
+
+The circular minimap in the bottom-right corner shows the whole floor live: your
+position and facing, and the sabotage targets as diamonds that fill in as you complete
+them. It dims during a blackout. It does **not** plot the staff - finding out where
+they are is the game.
+
+Watch the "Cognitive layer" strip above it: it counts model replies vs local
+fallbacks live, and every speech bubble in the event feed is tagged when it came from
+rules.
+
+---
+
+## Connecting a model
+
+Click **AI** in the HUD (or **AI provider** on the title screen).
+
+| Provider | Base URL | Key |
+|----------|----------|-----|
+| Ollama | `http://localhost:11434/v1` | none |
+| LM Studio | `http://localhost:1234/v1` | none |
+| OpenAI | `https://api.openai.com/v1` | required |
+| Anthropic | `https://api.anthropic.com/v1` | required |
+| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | required |
+
+Gemini model names turn over quickly - if **Test** returns a 404 naming a replacement,
+a one-click **Use &lt;model&gt;** button appears next to the error. **Fetch** lists everything
+your key can actually reach.
+| OpenRouter | `https://openrouter.ai/api/v1` | required |
+| Custom | anything OpenAI-compatible | optional |
+
+Anthropic uses `/v1/messages` with `x-api-key`; everything else uses
+`/chat/completions` with a bearer token - including Gemini, via Google's
+OpenAI-compatible endpoint (get a key from Google AI Studio). If any gateway rejects
+`response_format`, untick **Request JSON mode**; the parser recovers fenced and
+prose-wrapped JSON anyway. Custom headers are supported for gateways.
+**Keys are runtime-only** - they live in IndexedDB, never in the bundle or `.env`, and
+they are stripped from every exported or uploaded snapshot. Uncheck "remember this key"
+on a shared machine.
+
+In dev, `localhost:11434` and `localhost:1234` are routed through a Vite proxy, so
+Ollama and LM Studio need no CORS setup. Press **Test** to prove the endpoint, key and
+model name all work before you rely on them.
+
+Every request is budgeted: a fixed ~150-token system contract plus a context assembled
+from the last 3 interactions with that NPC and up to 4 compressed one-sentence world
+facts, trimmed cheapest-section-first until it fits. Replies are constrained to:
+
+```json
+{
+  "dialogue": "max 20 words",
+  "internal_thought": "max 15 words",
+  "emotion_state": "NEUTRAL|SUSPICIOUS|ALARMED|COOPERATIVE|HOSTILE",
+  "action_intent": "INVESTIGATE|FLEE|ACCUSE|FOLLOW|IGNORE",
+  "target_entity": "NPC_ID or PLAYER",
+  "suspicion_delta": { "PLAYER": 10, "NPC_GUARD_1": -5 }
+}
+```
+
+Malformed JSON gets one repair retry; schema violations get a retry naming the exact
+field. Word caps and delta clamps are enforced locally regardless, so a chatty model
+cannot break the bubble layout or the balance.
+
+---
+
+## How the deduction actually works
+
+- **Suspicion** is per-NPC and per-target - each of the five tracks an opinion of you
+  *and* of each other, and those opinions start non-zero.
+- **Gossip** diffuses it: NPCs within earshot and line of sight pull each other toward
+  the stronger opinion every few seconds. One planted chip can snowball.
+- **Secret roles** are re-rolled each session (Witness, Paranoid, Turncoat, Careerist,
+  Steady) and scale how fast an NPC gains suspicion and how hard they spread it.
+- **Framing:** evidence planted in a room implicates whoever is associated with that
+  room. The finder's suspicion of them jumps - and their suspicion of you drops.
+- **Consensus ends the run:** three convinced staff and Chief Rook calls a lockdown.
+
+---
+
+## Saves
+
+Everything persists to IndexedDB automatically - session state, the full NPC suspicion
+matrix, per-NPC conversation memory and the event log. Refresh mid-run and "Resume last
+run" picks it back up.
+
+**Saves** in the HUD offers a downloadable snapshot file, import (merge or replace), and
+optional Google sign-in for cloud backup. Firebase is entirely opt-in: copy
+`.env.example` to `.env` and fill in the `VITE_FIREBASE_*` values. Without it, the
+cloud section explains itself and the local half works normally.
+
+---
+
+## Development
+
+```bash
+npm run dev      # dev server with the local-provider proxy
+npm run build    # production build
+npm run smoke    # 29 headless tests, no browser or network required
+```
+
+`npm run smoke` covers map connectivity, A* correctness, the token budget, schema
+validation, every rule-based fallback, and each provider transport including the
+timeout and retry paths.
+
+In dev, `window.__BLACKOUT__` exposes `{ game, scene(), step(frames) }` for poking at a
+live run from the console, and `localStorage.blackoutDebug = '1'` turns on Arcade
+Physics debug rendering.
+
+See [PROGRESS.md](PROGRESS.md) for the architecture ledger, export signatures and
+verification notes.

@@ -1,0 +1,53 @@
+# ---- dependencies ----
+node_modules/
+.pnp
+.pnp.js
+
+# ---- build output ----
+dist/
+dist-ssr/
+build/
+.vite/
+*.tsbuildinfo
+
+# ---- secrets & local config ----
+# .env.example IS committed; real credentials never are.
+.env
+.env.*
+!.env.example
+.dev.vars
+*.pem
+*.key
+
+# ---- Cloudflare / Wrangler ----
+# wrangler.toml is config and should be committed; this is its local state.
+.wrangler/
+
+# ---- logs ----
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ---- editors & agent tooling ----
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+*~
+
+# ---- OS cruft ----
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# ---- misc local ----
+*.local
+coverage/
+.cache/
+tmp/
+scratch/
