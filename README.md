@@ -155,6 +155,24 @@ cannot break the bubble layout or the balance.
 
 ---
 
+## Rival Infiltrators (multiplayer, in progress)
+
+Two spies, one lab, and five witnesses who will only convict one of you. You both break
+into the same floor; the staff track suspicion against each of you separately; you win
+by walking out with the blame pointing at the other one. No meetings, no voting, no
+lying in a chat box - you compete at manipulating the simulation.
+
+**Working now:** room codes and display names, cross-tab and cross-machine rooms,
+synced NPCs and world state, rivals visible and moving in your game.
+
+**Not working yet:** the staff still track suspicion against one player, so the verdict
+half of the premise is not live. That is the next piece of work.
+
+Same machine? Open two tabs and join your own code - the loopback transport needs no
+server at all.
+
+---
+
 ## Saves
 
 Everything persists to IndexedDB automatically - session state, the full NPC suspicion

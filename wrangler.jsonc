@@ -3,17 +3,27 @@
   "name": "blackout-the-subterfuge",
   "compatibility_date": "2026-08-31",
 
-  // Assets-only Worker: there is no server code. The whole game is a static bundle
-  // that runs in the browser, and every stateful thing it does (saves, settings, NPC
-  // memory) lives in the player's own IndexedDB. Nothing to run server-side, nothing
-  // to bill.
-  //
-  // `main` is deliberately absent - adding a Worker script is what the multiplayer
-  // work will need later (Durable Objects for room state), not now.
+  // The Worker exists only to relay multiplayer WebSockets (/room/CODE). Every other
+  // request is served straight from the static bundle via the ASSETS binding, so the
+  // single-player game costs no compute at all.
+  "main": "worker/index.js",
+
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   },
+
+  // One Durable Object per room code, addressed with getByName(). SQLite-backed so it
+  // runs on the free plan; the object stores nothing, it just holds sockets open.
+  "durable_objects": {
+    "bindings": [
+      { "name": "ROOMS", "class_name": "RoomRelay" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["RoomRelay"] }
+  ],
 
   "observability": {
     "enabled": true
@@ -24,9 +34,8 @@
   // Cloudflare account. Wrangler creates the DNS record for you on deploy.
   //
   // Left commented on purpose: if the zone is not in the account, the deploy fails
-  // outright rather than falling back, and a failed first deploy is a bad way to
-  // find that out. Deploy to workers.dev first, confirm the game runs, then switch
-  // this on and redeploy.
+  // outright rather than falling back, and a failed deploy is a bad way to find
+  // that out.
   //
   // "routes": [
   //   { "pattern": "blackout.mkarjun.com", "custom_domain": true }

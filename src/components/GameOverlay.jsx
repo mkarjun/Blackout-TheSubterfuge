@@ -22,7 +22,7 @@ function useGameEvent(event, initial = null, { replay = true } = {}) {
 
 const ALERT_LABEL = ['CALM', 'UNEASY', 'ALARM', 'LOCKDOWN'];
 
-export default function GameOverlay({ onOpenApi, onOpenAuth, onRestart, onExit }) {
+export default function GameOverlay({ onOpenApi, onOpenAuth, onRestart, onExit, onOpenSupport }) {
   const tick = useGameEvent(EVENTS.GAME_TICK, null);
   const gameOver = useGameEvent(EVENTS.GAME_OVER, null);
   const [paused, setPaused] = useState(false);
@@ -85,6 +85,7 @@ export default function GameOverlay({ onOpenApi, onOpenAuth, onRestart, onExit }
       <div className="pointer-events-auto absolute right-3 top-3 flex gap-1.5">
         <button className="btn" onClick={onOpenApi}>AI</button>
         <button className="btn" onClick={onOpenAuth}>Saves</button>
+        <button className="btn" onClick={onOpenSupport}>Support</button>
         <button
           className="btn"
           onClick={() => { sfx.setMuted(!muted); setMuted(!muted); }}

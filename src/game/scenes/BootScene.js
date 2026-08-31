@@ -65,6 +65,7 @@ export class BootScene extends Phaser.Scene {
       resume: this.registry.get('resume'),
       levelId: this.registry.get('levelId'),
       difficulty: this.registry.get('difficulty'),
+      net: this.registry.get('net'),
     });
     this.scene.launch('HUDScene');
   }

@@ -52,12 +52,13 @@ let activeGame = null;
  * @param {object} [opts.resume] Saved session row to restore into MainLabScene.
  * @returns {Phaser.Game}
  */
-export function createGame(parent, { resume = null, levelId = null, difficulty = null } = {}) {
+export function createGame(parent, { resume = null, levelId = null, difficulty = null, net = null } = {}) {
   if (activeGame) destroyGame();
   activeGame = new Phaser.Game(buildConfig(parent));
   activeGame.registry.set('resume', resume);
   activeGame.registry.set('levelId', resume?.levelId || levelId);
   activeGame.registry.set('difficulty', resume?.difficulty || difficulty);
+  activeGame.registry.set('net', net);
 
   // Dev handle for the console: inspect scenes, force-step the loop, dump suspicion.
   if (import.meta.env?.DEV) {

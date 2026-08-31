@@ -28,6 +28,8 @@ import GridPathfinder from '../systems/Pathfinding.js';
 import { buildSightGrid, hasLineOfSight } from '../systems/VisionCone.js';
 import CognitiveEngine, { PRIORITY } from '../systems/CognitiveEngine.js';
 import { FSM } from '../systems/BehaviorTree.js';
+import RemotePlayer from '../entities/RemotePlayer.js';
+import { MSG, buildSnapshot } from '../../net/protocol.js';
 import eventManager, { EVENTS } from '../systems/EventManager.js';
 import sfx from '../systems/Sfx.js';
 import { compressEvent, pushSummary } from '../../services/promptBuilder.js';
@@ -67,6 +69,20 @@ export class MainLabScene extends Phaser.Scene {
     this.level = setActiveLevel(this.levelId);
     this.levelId = this.level.id;
     this.difficulty = getDifficulty(this.difficultyId);
+
+    /**
+     * Multiplayer role. 'solo' is the default and the reference implementation - the
+     * networked roles are a shell around the same simulation, never a second one.
+     *   host  - authoritative for NPCs, world state and suspicion; broadcasts snapshots.
+     *   guest - simulates only its own body, renders NPCs from snapshots.
+     *
+     * Player positions are self-reported by each client rather than host-simulated.
+     * That is a deliberate trade: it removes input latency and a whole class of
+     * reconciliation bugs, at the cost of trusting peers about where they are. For a
+     * game played with a friend on a shared code that is the right side of the trade.
+     */
+    this.net = data?.net || null;
+    this.netRole = this.net ? (this.net.isHost ? 'host' : 'guest') : 'solo';
   }
 
   /* =================================================================== create */
@@ -93,6 +109,9 @@ export class MainLabScene extends Phaser.Scene {
     };
     this.inventory = [];
 
+    this.remotePlayers = new Map();
+    this._netTick = 0;
+
     this._buildWorld();
     this._buildProps();
     this._buildActors();
@@ -104,6 +123,8 @@ export class MainLabScene extends Phaser.Scene {
     this.session = blankSession();
     if (this.resumeData) this._applySavedState(this.resumeData);
     this.cognition.setSessionId(this.session.id);
+
+    if (this.net) this._wireNet();
 
     this.logEvent({
       type: 'INFO',
@@ -339,15 +360,23 @@ export class MainLabScene extends Phaser.Scene {
 
     const worldCtx = { lightsOn: this.state.lightsOn, alertLevel: this.state.alertLevel };
 
-    for (const npc of this.npcs) {
-      const litHere = this._isLitAt(npc.x, npc.y);
-      const sawPlayerNow = npc.perceive(this.player, { lightsOn: litHere });
-      npc.update(time, delta, worldCtx);
+    if (this.netRole === 'guest') {
+      // A guest never runs NPC AI: two machines deciding what a guard thinks would
+      // desynchronise immediately. It interpolates toward the host's report.
+      for (const npc of this.npcs) npc.followNetTarget(time, delta);
+    } else {
+      for (const npc of this.npcs) {
+        const litHere = this._isLitAt(npc.x, npc.y);
+        const sawPlayerNow = npc.perceive(this.player, { lightsOn: litHere });
+        npc.update(time, delta, worldCtx);
 
-      if (sawPlayerNow) this._onNpcSpotsPlayer(npc);
-      this._witnessSabotage(npc);
-      this._checkCatch(npc, delta);
+        if (sawPlayerNow) this._onNpcSpotsPlayer(npc);
+        this._witnessSabotage(npc);
+        this._checkCatch(npc, delta);
+      }
     }
+
+    for (const [, sprite] of this.remotePlayers) sprite.update();
 
     this._updateInteractPrompt();
     this._updateChannel(delta);
@@ -1050,6 +1079,130 @@ export class MainLabScene extends Phaser.Scene {
       done: { ...this.state.sabotage },
       ready: this.state.objectivesDone >= 3,
     });
+  }
+
+  /* ============================================================== networking */
+
+  _wireNet() {
+    const net = this.net;
+
+    // Everyone reports their own body; the host additionally reports the world.
+    this.time.addEvent({ delay: 66, loop: true, callback: () => this._netBroadcast() });
+
+    this._netOffs = [
+      net.on('snapshot', (snap) => this._applySnapshot(snap)),
+      net.on('input', (msg) => this._applyPeerState(msg)),
+      net.on('roster', () => this._syncRemoteRoster()),
+      net.on('event', (e) => {
+        if (this.netRole !== 'guest') return;
+        eventManager.emit(EVENTS.WORLD_EVENT, { ...e, timestamp: Date.now() });
+      }),
+    ];
+
+    this._syncRemoteRoster();
+    this.events.once('shutdown', () => this._netOffs?.forEach((off) => off()));
+  }
+
+  /** Bodies for everyone in the room except us. */
+  _syncRemoteRoster() {
+    if (!this.net) return;
+    const roster = this.net.roster();
+    const wanted = new Set(roster.filter((p) => p.id !== this.net.clientId).map((p) => p.id));
+
+    for (const [id, sprite] of this.remotePlayers) {
+      if (!wanted.has(id)) { sprite.destroy(); this.remotePlayers.delete(id); }
+    }
+    for (const p of roster) {
+      if (p.id === this.net.clientId || this.remotePlayers.has(p.id)) continue;
+      const color = Phaser.Display.Color.HexStringToColor(p.color).color;
+      this.remotePlayers.set(p.id, new RemotePlayer(this, { id: p.id, name: p.name, color }));
+    }
+  }
+
+  _selfState() {
+    return {
+      id: this.net.clientId,
+      x: Math.round(this.player.x),
+      y: Math.round(this.player.y),
+      f: Number(this.player.facing.toFixed(2)),
+      sn: this.player.sneaking,
+      done: this.state.objectivesDone,
+      out: this.gameOverState === 'won',
+    };
+  }
+
+  _netBroadcast() {
+    if (!this.net || this.isPaused) return;
+
+    if (this.netRole === 'guest') {
+      // Guests report only themselves. The host folds that into its world.
+      this.net.sendInput({ seq: this._netTick++, self: this._selfState() });
+      return;
+    }
+
+    // Host: authoritative world + every body it knows about.
+    const players = [this._selfState()];
+    for (const [, sprite] of this.remotePlayers) {
+      players.push({
+        id: sprite.playerId,
+        x: Math.round(sprite.target.x),
+        y: Math.round(sprite.target.y),
+        f: sprite.target.f,
+        sn: sprite.sneaking,
+        out: sprite.escaped,
+      });
+    }
+
+    this.net.broadcastSnapshot(buildSnapshot({
+      tick: this._netTick++,
+      players,
+      npcs: this.npcs.map((n) => ({
+        id: n.id,
+        x: Math.round(n.x),
+        y: Math.round(n.y),
+        f: Number(n.facing.toFixed(2)),
+        a: n.alertLevel,
+      })),
+      world: {
+        lights: this.state.lightsOn,
+        alert: this.state.alertLevel,
+        lockdown: this.state.lockdown,
+        clock: this._clock(),
+      },
+    }));
+  }
+
+  /** Host side: a guest told us where it is. */
+  _applyPeerState(msg) {
+    if (this.netRole !== 'host' || !msg.self) return;
+    const sprite = this.remotePlayers.get(msg.self.id || msg.from);
+    if (sprite) sprite.apply(msg.self);
+  }
+
+  /** Guest side: adopt the host's world. */
+  _applySnapshot(snap) {
+    if (this.netRole !== 'guest') return;
+
+    for (const p of snap.players || []) {
+      if (p.id === this.net.clientId) continue;
+      this.remotePlayers.get(p.id)?.apply(p);
+    }
+
+    for (const row of snap.npcs || []) {
+      const npc = this.npcs.find((n) => n.id === row.id);
+      if (!npc) continue;
+      npc.netTarget = row;
+    }
+
+    if (snap.world) {
+      if (snap.world.lights !== this.state.lightsOn) {
+        this.state.lightsOn = snap.world.lights;
+        this._redrawDarkness();
+        eventManager.emit(EVENTS.LIGHTS_CHANGED, snap.world.lights);
+      }
+      this.state.alertLevel = snap.world.alert;
+      this.state.lockdown = snap.world.lockdown;
+    }
   }
 
   logEvent(event) {

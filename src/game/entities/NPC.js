@@ -390,6 +390,33 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
+  /**
+   * Guest-side update. The behaviour tree is NOT ticked: the host owns what this
+   * character thinks, and running the tree here as well would produce two guards who
+   * agree for about a second. Interpolate toward the host's report and keep the
+   * presentation (cone, bubble, labels) alive locally.
+   */
+  followNetTarget(time, delta) {
+    const t = this.netTarget;
+    if (t) {
+      const far = Phaser.Math.Distance.Between(this.x, this.y, t.x, t.y) > TILE_SIZE * 4;
+      if (far) this.setPosition(t.x, t.y);
+      else this.setPosition(Phaser.Math.Linear(this.x, t.x, 0.22), Phaser.Math.Linear(this.y, t.y, 0.22));
+      this.facing = t.f ?? this.facing;
+      this.alertLevel = t.a ?? 0;
+    }
+    this.setVelocity(0, 0);
+
+    this.cone.setFacing(this.facing);
+    this.cone.setAlertColor(this.alertLevel);
+    this.cone.redraw(time);
+    this.bubble.update(time, delta, this.x, this.y - 46);
+    this.faceMark.setPosition(this.x + Math.cos(this.facing) * 20, this.y + Math.sin(this.facing) * 20);
+    this.label.setPosition(Math.round(this.x), Math.round(this.y) - 34);
+    this.glyph.setPosition(Math.round(this.x), Math.round(this.y) - 50);
+    this.glyph.setText(this.alertLevel >= 2 ? '!' : this.alertLevel === 1 ? '?' : '');
+  }
+
   /* ------------------------------------------------------ persistence */
 
   serialize() {

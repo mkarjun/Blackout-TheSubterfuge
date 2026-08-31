@@ -13,6 +13,8 @@ import GameOverlay from './components/GameOverlay.jsx';
 import ApiConfigModal from './components/ApiConfigModal.jsx';
 import AuthModal from './components/AuthModal.jsx';
 import LandingPage from './components/LandingPage.jsx';
+import LobbyPanel from './components/LobbyPanel.jsx';
+import SupportPanel from './components/SupportPanel.jsx';
 
 const CONTROLS = [
   ['WASD / Arrows', 'Move'],
@@ -33,6 +35,7 @@ export default function App() {
   const [resume, setResume] = useState(null);
   const [showApi, setShowApi] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
   const [llmReady, setLlmReady] = useState(false);
   const [levelId, setLevelId] = useState(LEVEL_LIST[0].id);
   const [difficulty, setDifficulty] = useState(DEFAULT_DIFFICULTY);
@@ -62,10 +65,22 @@ export default function App() {
   /* ------------------------------------------------------------- lifecycle */
 
   const [pendingResume, setPendingResume] = useState(null);
+  const [netSession, setNetSession] = useState(null);
 
   const startGame = useCallback((resumeData) => {
     sfx.unlock();
     setPendingResume(resumeData || null);
+    setNetSession(null);
+    setPhase('playing');
+  }, []);
+
+  /** Host pressed start, or a guest received START. Same path either way. */
+  const launchMultiplayer = useCallback((session, msg) => {
+    sfx.unlock();
+    if (msg?.levelId) setLevelId(msg.levelId);
+    if (msg?.difficulty) setDifficulty(msg.difficulty);
+    setPendingResume(null);
+    setNetSession(session);
     setPhase('playing');
   }, []);
 
@@ -80,8 +95,8 @@ export default function App() {
   useEffect(() => {
     if (phase !== 'playing' || startedRef.current || !hostRef.current) return;
     startedRef.current = true;
-    createGame(hostRef.current, { resume: pendingResume, levelId, difficulty });
-  }, [phase, pendingResume, levelId, difficulty]);
+    createGame(hostRef.current, { resume: pendingResume, levelId, difficulty, net: netSession });
+  }, [phase, pendingResume, levelId, difficulty, netSession]);
 
   useEffect(() => () => {
     destroyGame();
@@ -134,6 +149,7 @@ export default function App() {
             onOpenAuth={() => setShowAuth(true)}
             onRestart={handleRestart}
             onExit={handleExit}
+            onOpenSupport={() => setShowSupport(true)}
           />
         </>
       )}
@@ -144,7 +160,20 @@ export default function App() {
           llmReady={llmReady}
           provider={llmClient.getConfig().model}
           onStart={() => setPhase('briefing')}
+          onRival={() => setPhase('lobby')}
           onResume={() => startGame(resume)}
+          onSupport={() => setShowSupport(true)}
+        />
+      )}
+
+      {phase === 'lobby' && (
+        <LobbyPanel
+          levelId={levelId}
+          difficulty={difficulty}
+          onSelectLevel={setLevelId}
+          onSelectDifficulty={setDifficulty}
+          onBack={() => setPhase('landing')}
+          onLaunch={launchMultiplayer}
         />
       )}
 
@@ -167,6 +196,7 @@ export default function App() {
 
       {showApi && <ApiConfigModal onClose={() => setShowApi(false)} />}
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+      {showSupport && <SupportPanel onClose={() => setShowSupport(false)} />}
     </div>
   );
 }

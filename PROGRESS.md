@@ -5,7 +5,7 @@
 
 **Project:** 2D top-down stealth & social-deduction mystery.
 **Stack:** Vite 6 + React 18 + Tailwind 3 + Phaser 3.90 + Dexie 4 + universal OpenAI-compatible LLM client.
-**Ledger created:** 2026-08-28 · **Last updated:** 2026-08-28 (rev 4: three levels, difficulty settings)
+**Ledger created:** 2026-08-28 · **Last updated:** 2026-08-31 (rev 5: Cloudflare hosting, landing page, multiplayer foundation)
 
 ---
 
@@ -461,7 +461,58 @@ it has been shared in plaintext.
 
 ---
 
-## 7. Multiplayer - design, not yet built
+## 7. Multiplayer - Rival Infiltrators (foundation built, premise NOT yet wired)
+
+**Design.** Co-op and asymmetric were both rejected: they put humans at the centre and
+demote the AI staff to scenery, which throws away the only thing this game has that
+nothing else does. Instead the NPCs are the jury. Two to four players infiltrate the
+same floor, the staff track suspicion against each player independently, and you win by
+leaving with the blame pointing at a rival. No meetings, no voting, no lying in a chat
+box - you compete at manipulating a social simulation.
+
+**Topology.** Host-authoritative for the world, self-reported for bodies:
+  * The host runs the existing single-player simulation completely unchanged - NPCs,
+    suspicion, cognition - and broadcasts snapshots at 15Hz. Single-player therefore
+    stays the reference implementation; multiplayer is a shell around it.
+  * Guests never tick NPC AI (two machines deciding what a guard thinks desynchronise
+    within seconds). They interpolate NPCs toward the host's report.
+  * Each client simulates and reports its *own* body. This removes input latency and a
+    whole class of reconciliation bugs, at the cost of trusting peers about their own
+    position. For friends on a shared code that is the right side of the trade; it is
+    not acceptable for ranked or public play.
+
+**Transport.** Two implementations behind one interface:
+  * `LoopbackTransport` (BroadcastChannel) - same machine, cross-tab, no server, no
+    account, no deploy. This is what makes the whole stack testable, and it is how the
+    sync below was verified.
+  * `SocketTransport` -> Cloudflare Durable Object relay. The DO is deliberately dumb:
+    it accepts sockets and fans bytes out, never parsing game state. Authority stays in
+    the host browser, so an idle room burns no CPU and the Hibernation API lets the
+    object leave memory while keeping sockets open.
+
+### Built and verified (cross-tab, two live tabs)
+- Room create/join by 5-character code, display names, roster with per-player colours,
+  host election (joining an empty code makes you the host and says so), heartbeat
+  pruning, and BYE on disconnect.
+- Host -> guest: NPC positions and alert levels (all 5 driven by the host), world state
+  (lights, alert, lockdown). Guest saw the host at x=1647 against a reported 1653 -
+  interpolation lag, correct.
+- Guest -> host: guest moved to x=1175, host rendered the rival at x=1185.
+- Host presses Start and every client launches into the same level and difficulty.
+
+### NOT built - the mode does not yet play as designed
+- **Per-player suspicion.** NPCs still track a single `PLAYER` key, so the staff
+  currently react only to the host and a guest is effectively a ghost to them. This is
+  the core of the premise and the next piece of work: widen the suspicion map to
+  per-client ids, and extend gossip, framing, catching and lockdown to name a player.
+- **The verdict screen** - per-player scoring at end of run (who escaped, who the floor
+  blamed).
+- **The Durable Object path has never been executed.** Only the loopback transport has
+  run. The Worker and DO code are written and configured but unverified until deploy.
+
+---
+
+## 7b. Multiplayer - original design notes (superseded)
 
 Not started, deliberately. It is an architecture change rather than a feature: the game
 today runs one authoritative simulation in one browser, and nothing in the loop is

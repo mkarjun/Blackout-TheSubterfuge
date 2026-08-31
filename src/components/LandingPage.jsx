@@ -322,7 +322,7 @@ const PILLARS = [
 
 /* ------------------------------------------------------------------ page */
 
-export default function LandingPage({ onStart, onResume, resume, llmReady, provider }) {
+export default function LandingPage({ onStart, onRival, onResume, onSupport, resume, llmReady, provider }) {
   return (
     <div className="relative h-full w-full overflow-y-auto bg-ink">
       <Backdrop />
@@ -358,6 +358,14 @@ export default function LandingPage({ onStart, onResume, resume, llmReady, provi
                          hover:bg-neon/20 hover:shadow-[0_0_30px_-6px_rgba(56,242,196,0.6)]"
             >
               <span className="relative z-10">Enter the facility</span>
+            </button>
+
+            <button
+              onClick={onRival}
+              className="rounded border border-edge px-6 py-3.5 text-[12px] uppercase tracking-[0.2em]
+                         text-slate-300 transition-colors hover:border-neon/50 hover:text-neon"
+            >
+              Play a rival
             </button>
 
             {resume && (
@@ -458,14 +466,19 @@ export default function LandingPage({ onStart, onResume, resume, llmReady, provi
 
         <footer className="mb-6 flex flex-wrap items-center justify-between gap-3 text-[10px] uppercase tracking-[0.2em] text-dim">
           <span>Blackout &middot; The Subterfuge</span>
-          <a
-            href="https://github.com/mkarjun/Blackout-TheSubterfuge"
-            target="_blank"
-            rel="noreferrer noopener"
-            className="transition-colors hover:text-neon"
-          >
-            Source on GitHub
-          </a>
+          <div className="flex flex-wrap items-center gap-4">
+            <button onClick={onSupport} className="uppercase tracking-[0.2em] transition-colors hover:text-neon">
+              Support the game
+            </button>
+            <a
+              href="https://github.com/mkarjun/Blackout-TheSubterfuge"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="transition-colors hover:text-neon"
+            >
+              Source on GitHub
+            </a>
+          </div>
         </footer>
       </div>
     </div>
