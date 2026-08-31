@@ -2,9 +2,32 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      viewport-fit=cover lets the layout run under a notch; the HUD gutters use safe
+      area insets so nothing important lands beneath one. Zoom is left enabled - the
+      landing page is a document and people need to be able to enlarge it - and the
+      game canvas blocks pinch and double-tap locally via touch-action instead.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Blackout: The Subterfuge</title>
-    <meta name="description" content="2D stealth and social deduction inside a locked-down research lab." />
+    <meta name="description" content="A stealth game where the guards think for themselves. Sabotage a locked-down research lab, frame someone else for it, and get out before five people who talk to each other agree on your name." />
+    <meta name="theme-color" content="#05070c" />
+
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+    <!-- iOS has no manifest support worth the name; these are its equivalents. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Blackout" />
+
+    <meta property="og:title" content="Blackout: The Subterfuge" />
+    <meta property="og:description" content="No meetings. No voting. Five people who make up their own minds - and you, deciding what they conclude." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/icons/icon-512.png" />
+    <meta name="twitter:card" content="summary" />
   </head>
   <body>
     <div id="root"></div>

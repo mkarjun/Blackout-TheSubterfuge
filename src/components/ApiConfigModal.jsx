@@ -320,10 +320,28 @@ export default function ApiConfigModal({ onClose }) {
 /* ------------------------------------------------------------------ shared */
 
 export function Modal({ title, subtitle, onClose, children }) {
+  // The header button has always said "Esc"; until now nothing implemented it, so
+  // the key fell through to the HUD's handler and paused the run *behind* the modal.
+  // The listener is registered in the capture phase precisely so it beats that one,
+  // and stops the event rather than letting both fire.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      e.preventDefault();
+      onClose();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onClose]);
+
   return (
     <div
-      className="pointer-events-auto absolute inset-0 z-20 flex items-center justify-center bg-ink/85 p-4"
+      className="pointer-events-auto absolute inset-0 z-30 flex items-center justify-center bg-ink/85 p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
     >
       <div className="panel max-h-[92vh] w-[620px] max-w-full overflow-y-auto p-5">
         <div className="mb-4 flex items-start justify-between">

@@ -91,8 +91,29 @@ export function getGame() {
 
 export function destroyGame() {
   if (!activeGame) return;
-  activeGame.destroy(true);
+  const dying = activeGame;
   activeGame = null;
+  dying.destroy(true);
+
+  /*
+   * Phaser's destroy() only *schedules* the teardown - the real work happens on the
+   * instance's next step. If that step never comes, and it does not when the loop is
+   * throttled (a hidden tab, a backgrounded window), the dead game keeps its
+   * window-level keyboard listener. That listener still calls preventDefault, so
+   * every key the *next* instance should have received arrives already handled and
+   * Phaser drops it: exit to the title, start a new run, and the game is unplayable
+   * with a keyboard that looks fine in every diagnostic.
+   *
+   * Running the teardown here makes it synchronous, which is what the caller assumed
+   * it already was.
+   */
+  if (dying.pendingDestroy) {
+    try {
+      dying.runDestroy();
+    } catch (err) {
+      console.warn('[GameConfig] forced teardown failed', err);
+    }
+  }
 }
 
 /** Restart the run from scratch, keeping the same Phaser instance. */

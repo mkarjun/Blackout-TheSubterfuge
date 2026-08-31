@@ -24,22 +24,32 @@ local rule-based dialogue system. Connecting a model changes the writing, not th
 
 ## Controls
 
-| Key | Action |
-|-----|--------|
-| WASD / Arrows | Move |
-| Shift | Sneak - silent, and 38% harder to spot |
-| E | Interact / sabotage / pick up - press again to abort a job in progress |
-| F | Plant the evidence you are carrying |
-| H | Hack lights - facility-wide at a breaker panel, otherwise just this room |
-| Space | Talk to whoever is closest |
-| Esc | Close a conversation, then pause |
+| Key | Touch | Action |
+|-----|-------|--------|
+| WASD / Arrows | Left thumb, anywhere on the left half | Move. The stick is analog - a half push is a genuine creep |
+| Shift | **Sneak** (latches) | Silent, and 38% harder to spot |
+| E | **Use** | Interact / sabotage / pick up - again to abort a job in progress |
+| F | **Plant** | Plant the evidence you are carrying |
+| H | **Lights** | Hack lights - facility-wide at a breaker panel, otherwise just this room |
+| Space | **Talk** | Talk to whoever is closest |
+| Tab | eye button | Show or hide the HUD panels |
+| Esc | pause button | Close a conversation, then pause |
 
-**Exit** (top right, the pause overlay, or the end-of-run screen) saves and returns to
-the title screen; the run is then offered as **Resume last run**.
+Nothing above needs to be memorised first. A first run walks you through the five
+verbs one at a time, each step clearing itself as soon as you do the thing, and the
+HUD panels arrive as the steps earn them.
+
+The side panels **fade out when you walk under them** and stop taking clicks, so the
+body is never lost behind a window. Each one also folds to its title bar, and Tab
+clears all of them at once.
+
+**Exit** lives under the gear menu (top right), on the pause overlay, and on the
+end-of-run screen. It saves and returns to the title screen; the run is then offered
+as **Resume run**.
 
 **Win:** sabotage all three systems on the floor, then reach the exit.
 
-**Three floors**, picked from the title screen:
+**Three floors**, under *Change* on the title screen:
 | # | Level | Character |
 |---|-------|-----------|
 | 1 | Halden Institute | Rooms around a corridor ring. Short sightlines, two ways out of everywhere. |
@@ -53,6 +63,27 @@ because it wins footraces: no NPC on any setting outruns the player, and a test 
 that.
 **Lose:** let someone who is already sure it was you keep hands on you for a full
 second. You get a warning and they stagger when they grab - move and you are out of it.
+
+---
+
+## On a phone
+
+The game installs. Chrome and Edge offer an **Install** button in the title-screen
+nav; on iOS, Safari's Share sheet has *Add to Home Screen* and the button explains
+where to find it. Installed, it launches fullscreen and landscape with no browser
+chrome, and a service worker keeps the shell, the icons and the music cached, so
+after the first visit it opens offline.
+
+Controls are a floating analog stick under the left thumb and an action cluster under
+the right. The stick spawns wherever your thumb lands rather than sitting in a fixed
+spot, and buttons light up only when they are live - **Use** near a machine, **Talk**
+with a name on it when someone is in range, **Plant** when you are carrying. The
+radar moves to the top right on touch so it is not underneath the Use button, and the
+HUD panels start hidden on narrow screens.
+
+Portrait is refused rather than squeezed: the floor is wider than it is tall and both
+thumbs need a corner, so the game asks for the quarter turn and picks the run back up
+when you make it.
 
 ---
 
@@ -204,3 +235,15 @@ Physics debug rendering.
 
 See [PROGRESS.md](PROGRESS.md) for the architecture ledger, export signatures and
 verification notes.
+
+---
+
+## Credits
+
+The score is *Stealth Mission Music Loop* by **Enchanted Hive**. It ships as a single
+133.3-second loop, cut on a period measured by autocorrelation so it repeats with no
+seam, levelled to about -20 LUFS and encoded at 96 kbps (1.5 MB).
+
+> **Licensing note:** confirm the track's licence terms and the attribution the
+> artist requires before publishing this build. It is included here because it was
+> supplied for the project, not because its licence has been verified.

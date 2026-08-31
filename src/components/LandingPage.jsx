@@ -1,15 +1,27 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { LEVEL_LIST } from '../assets/tilemaps/labMap.js';
+import { DIFFICULTIES, DIFFICULTY_ORDER } from '../game/difficulty.js';
+import SuspicionWebDemo from './SuspicionWebDemo.jsx';
+import { useInstallPrompt, useIsTouch } from './useDevice.js';
+import {
+  IconCoffee, IconGithub, IconPlay, IconUsers, IconChevron, IconSpark, IconDownload,
+  IconClose,
+} from './Icons.jsx';
 
 /**
- * LandingPage - the cinematic front door.
+ * LandingPage - the only screen between a visitor and a run.
  *
- * Deliberately separate from the briefing screen: this page's only job is to make
- * someone want to press the button, and it is the surface a link gets shared with.
- * The briefing (level, difficulty, controls) comes after, so nothing here competes
- * with the pitch.
+ * Play starts immediately on the last-used settings; level and difficulty live in a
+ * disclosure for the people who want them, and the keybinds are taught in-game rather
+ * than in a table nobody reads. The briefing screen this replaced asked for all four
+ * before anyone had seen the game move.
  *
- * All art is drawn in SVG/canvas rather than loaded - same constraint as the game
- * itself, and it keeps the page a single fast request with nothing to 404.
+ * The differentiator section exists because "five people, one saboteur" reads as one
+ * specific other game to almost everyone, and a screenshot cannot show the difference.
+ * So the page runs the real suspicion panel against a scripted run instead.
+ *
+ * All art is drawn in SVG/canvas rather than loaded, which keeps the page one request
+ * with nothing to 404.
  */
 
 /* --------------------------------------------------------------- backdrop */
@@ -308,11 +320,11 @@ const BEATS = [
 const PILLARS = [
   {
     k: 'Characters, not barks',
-    v: 'Every line is generated in character, in context, against what they actually saw. Bring any model - or none, and the local fallback carries it.',
+    v: 'Every line is written in character, in context, against what that person actually saw. Bring any model - or none, and the local writer carries it.',
   },
   {
     k: 'A social sim you can push',
-    v: 'Suspicion is tracked per person and per target. Frame someone and watch the accusation travel through the room without you.',
+    v: 'Suspicion is tracked per person and per target. Frame someone and watch the accusation travel the room without you in it.',
   },
   {
     k: 'Three floors, three difficulties',
@@ -320,16 +332,98 @@ const PILLARS = [
   },
 ];
 
+/** The three lines that separate this from the game everybody assumes it is. */
+const CONTRASTS = [
+  {
+    k: 'No meetings, no voting',
+    v: 'Suspicion is a number in five heads. It moves on where you were seen and what you said, not on how well you argued in a chat box.',
+  },
+  {
+    k: 'Nobody is waiting on you',
+    v: 'No lobby to fill, no ghost mode, no sitting out while other people finish. Six minutes, start to end, all yours.',
+  },
+  {
+    k: 'The other five are the game',
+    v: 'They patrol, witness, gossip and change their minds in real time, while you are still in the room. You are not lying to players. You are steering what a simulation concludes.',
+  },
+];
+
 /* ------------------------------------------------------------------ page */
 
-export default function LandingPage({ onStart, onRival, onResume, onSupport, resume, llmReady, provider }) {
+export default function LandingPage({
+  onPlay, onRival, onResume, onSupport, onOpenApi, onOpenAuth,
+  resume, llmReady, provider,
+  levelId, difficulty, onSelectLevel, onSelectDifficulty,
+}) {
+  const [showOptions, setShowOptions] = useState(false);
+  const [showIosHelp, setShowIosHelp] = useState(false);
+  const { canInstall, needsManualInstall, install } = useInstallPrompt();
+  const isTouch = useIsTouch();
+  const level = LEVEL_LIST.find((l) => l.id === levelId) || LEVEL_LIST[0];
+  const diff = DIFFICULTIES[difficulty] || DIFFICULTIES[DIFFICULTY_ORDER[0]];
+
   return (
     <div className="relative h-full w-full overflow-y-auto bg-ink">
       <Backdrop />
 
-      <div className="relative mx-auto flex min-h-full w-full max-w-5xl flex-col px-6 py-10 sm:px-10">
+      {/* ------------------------------------------------------------- nav */}
+      <nav className="sticky top-0 z-30 border-b border-edge/60 bg-ink/80 backdrop-blur-md">
+        <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-2.5 sm:px-10">
+          <span className="text-[12px] font-black tracking-[0.2em] text-slate-100">BLACKOUT</span>
+          <span className="hidden text-[10px] uppercase tracking-[0.28em] text-dim sm:inline">
+            The Subterfuge
+          </span>
+
+          <span className="flex-1" />
+
+          <a
+            href="#different"
+            className="hidden px-2 text-[11px] uppercase tracking-[0.16em] text-dim
+                       transition-colors hover:text-slate-200 sm:inline"
+          >
+            How it plays
+          </a>
+
+          {(canInstall || needsManualInstall) && (
+            <button
+              onClick={() => (canInstall ? install() : setShowIosHelp(true))}
+              className="flex items-center gap-2 rounded border border-neon/40 bg-neon/5 px-3 py-1.5
+                         text-[11.5px] text-neon transition-colors hover:border-neon/80 hover:bg-neon/15"
+            >
+              <IconDownload size={15} />
+              <span className="hidden sm:inline">Install</span>
+            </button>
+          )}
+
+          <a
+            href="https://github.com/mkarjun/Blackout-TheSubterfuge"
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label="Source on GitHub"
+            title="Source on GitHub"
+            className="hidden h-8 w-8 place-items-center rounded border border-edge text-slate-400
+                       transition-colors hover:border-neon/50 hover:text-neon sm:grid"
+          >
+            <IconGithub size={15} />
+          </a>
+
+          {/* The ask, given a real target size, a colour of its own and an icon -
+              rather than nine grey pixels at the bottom of the page. */}
+          <button
+            onClick={onSupport}
+            className="flex items-center gap-2 rounded border border-caution/50 bg-caution/10 px-3 py-1.5
+                       text-[11.5px] font-semibold text-caution transition-colors
+                       hover:border-caution hover:bg-caution/20"
+          >
+            <IconCoffee size={15} />
+            <span className="hidden sm:inline">Support</span>
+          </button>
+        </div>
+      </nav>
+
+      <div className="relative mx-auto flex w-full max-w-5xl flex-col px-5 pb-10 sm:px-10">
         {/* ---------------------------------------------------------- hero */}
-        <header className="flex min-h-[76vh] flex-col justify-center">
+        <header className="flex min-h-[72vh] flex-col justify-center py-10">
           <div className="mb-5 flex items-center gap-3">
             <span className="h-px w-10 bg-neon/60" />
             <span className="text-[10px] uppercase tracking-[0.42em] text-neon/80">
@@ -350,46 +444,77 @@ export default function LandingPage({ onStart, onRival, onResume, onSupport, res
             other agree on your name.
           </p>
 
+          {/* One button. Everything else on this row is optional. */}
           <div className="mt-9 flex flex-wrap items-center gap-3">
             <button
-              onClick={onStart}
-              className="group relative overflow-hidden rounded border border-neon/70 bg-neon/10 px-9 py-3.5
-                         text-[13px] uppercase tracking-[0.3em] text-neon transition-all
-                         hover:bg-neon/20 hover:shadow-[0_0_30px_-6px_rgba(56,242,196,0.6)]"
+              onClick={onPlay}
+              className="group flex items-center gap-3 rounded border border-neon/70 bg-neon/10 px-9 py-4
+                         text-[14px] font-semibold uppercase tracking-[0.24em] text-neon transition-all
+                         hover:bg-neon/20 hover:shadow-[0_0_36px_-6px_rgba(56,242,196,0.7)]"
             >
-              <span className="relative z-10">Enter the facility</span>
-            </button>
-
-            <button
-              onClick={onRival}
-              className="rounded border border-edge px-6 py-3.5 text-[12px] uppercase tracking-[0.2em]
-                         text-slate-300 transition-colors hover:border-neon/50 hover:text-neon"
-            >
-              Play a rival
+              <IconPlay size={17} />
+              Play now
             </button>
 
             {resume && (
               <button
                 onClick={onResume}
-                className="rounded border border-edge px-6 py-3.5 text-[12px] uppercase tracking-[0.2em]
+                className="rounded border border-edge px-6 py-4 text-[12px] uppercase tracking-[0.2em]
                            text-slate-300 transition-colors hover:border-neon/50 hover:text-neon"
               >
                 Resume run
               </button>
             )}
 
-            <a
-              href="#story"
-              className="px-2 py-3.5 text-[11px] uppercase tracking-[0.2em] text-dim transition-colors hover:text-slate-300"
+            <button
+              onClick={onRival}
+              className="flex items-center gap-2 rounded border border-edge px-5 py-4 text-[12px]
+                         uppercase tracking-[0.2em] text-slate-300 transition-colors
+                         hover:border-neon/50 hover:text-neon"
             >
-              How it plays &darr;
-            </a>
+              <IconUsers size={15} />
+              Play a rival
+            </button>
           </div>
 
-          <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px] uppercase tracking-[0.18em] text-dim">
+          {/* The mission line: says what Play will do, and folds open if you care. */}
+          <div className="mt-4 max-w-2xl">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-dim">
+              <span className="text-slate-400">{level.name}</span>
+              <span className="text-edge">/</span>
+              <span className="text-slate-400">{diff.label}</span>
+              <span className="text-edge">/</span>
+              <span>about six minutes</span>
+              <button
+                onClick={() => setShowOptions((v) => !v)}
+                className="ml-1 flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-neon/80
+                           transition-colors hover:text-neon"
+              >
+                {showOptions ? 'Hide' : 'Change'}
+                <IconChevron open={showOptions} size={12} />
+              </button>
+            </div>
+
+            {showOptions && (
+              <MissionOptions
+                levelId={levelId}
+                difficulty={difficulty}
+                onSelectLevel={onSelectLevel}
+                onSelectDifficulty={onSelectDifficulty}
+                onOpenApi={onOpenApi}
+                onOpenAuth={onOpenAuth}
+                llmReady={llmReady}
+                provider={provider}
+              />
+            )}
+          </div>
+
+          <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px] uppercase tracking-[0.18em] text-dim">
             <span>Runs in the browser</span>
             <span className="text-edge">/</span>
-            <span>No install</span>
+            <span>No account</span>
+            <span className="text-edge">/</span>
+            <span>{isTouch ? 'Phone controls built in' : 'Phone, tablet or desktop'}</span>
             <span className="text-edge">/</span>
             <span className={llmReady ? 'text-neon/80' : ''}>
               {llmReady ? `AI: ${provider}` : 'Plays with or without an AI key'}
@@ -397,8 +522,43 @@ export default function LandingPage({ onStart, onRival, onResume, onSupport, res
           </div>
         </header>
 
+        {/* ------------------------------------------------ the differentiator */}
+        <section id="different" className="scroll-mt-16 border-t border-edge py-16">
+          <div className="mb-3 text-[10px] uppercase tracking-[0.4em] text-neon/80">
+            Not the game you are thinking of
+          </div>
+          <h2 className="max-w-2xl text-[28px] font-semibold leading-tight tracking-tight text-slate-100 sm:text-[34px]">
+            No meeting. No vote.
+            <span className="text-neon"> Five people who make up their own minds.</span>
+          </h2>
+
+          <div className="mt-10 grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="space-y-6">
+              {CONTRASTS.map((c) => (
+                <div key={c.k} className="border-l-2 border-edge pl-4">
+                  <h3 className="mb-1.5 text-[15px] font-semibold text-slate-100">{c.k}</h3>
+                  <p className="text-[13px] leading-relaxed text-slate-400">{c.v}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* The live instrument, running a scripted frame job. */}
+            <figure className="panel p-5">
+              <figcaption className="mb-3 flex items-baseline justify-between">
+                <span className="panel-title">Live: the theory</span>
+                <span className="text-[9px] uppercase tracking-widest text-dim">replaying a run</span>
+              </figcaption>
+              <SuspicionWebDemo size={300} />
+              <p className="mt-3 border-t border-edge pt-3 text-[10.5px] leading-relaxed text-dim">
+                The real HUD panel, not an illustration. Lines pointing in are cases against
+                you. Purple lines between them are the case you built for someone else.
+              </p>
+            </figure>
+          </div>
+        </section>
+
         {/* --------------------------------------------------------- story */}
-        <section id="story" className="scroll-mt-8 py-16">
+        <section id="story" className="scroll-mt-16 border-t border-edge py-16">
           <div className="mb-10 flex items-baseline gap-4">
             <h2 className="text-[11px] uppercase tracking-[0.4em] text-neon/80">The job</h2>
             <span className="h-px flex-1 bg-edge" />
@@ -430,9 +590,9 @@ export default function LandingPage({ onStart, onRival, onResume, onSupport, res
         </section>
 
         {/* -------------------------------------------------------- pillars */}
-        <section className="pb-16">
+        <section className="border-t border-edge py-16">
           <div className="mb-8 flex items-baseline gap-4">
-            <h2 className="text-[11px] uppercase tracking-[0.4em] text-neon/80">Why it is different</h2>
+            <h2 className="text-[11px] uppercase tracking-[0.4em] text-neon/80">Under the hood</h2>
             <span className="h-px flex-1 bg-edge" />
           </div>
           <div className="grid gap-4 md:grid-cols-3">
@@ -446,41 +606,184 @@ export default function LandingPage({ onStart, onRival, onResume, onSupport, res
         </section>
 
         {/* ------------------------------------------------------ final CTA */}
-        <section className="panel mb-10 flex flex-col items-center gap-5 px-6 py-12 text-center">
+        <section className="panel mb-8 flex flex-col items-center gap-5 px-6 py-12 text-center">
           <h2 className="text-[26px] font-semibold tracking-tight text-slate-100">
             The night cycle has already started.
           </h2>
           <p className="max-w-md text-[13px] leading-relaxed text-slate-400">
-            Pick a floor, pick how hard they are looking, and go. A run takes a few minutes.
-            Losing one is the interesting part.
+            Six minutes a run. The end screen shows you whose story won.
           </p>
           <button
-            onClick={onStart}
-            className="rounded border border-neon/70 bg-neon/10 px-10 py-3.5 text-[13px] uppercase
-                       tracking-[0.3em] text-neon transition-all hover:bg-neon/20
-                       hover:shadow-[0_0_30px_-6px_rgba(56,242,196,0.6)]"
+            onClick={onPlay}
+            className="flex items-center gap-3 rounded border border-neon/70 bg-neon/10 px-10 py-4
+                       text-[14px] font-semibold uppercase tracking-[0.24em] text-neon transition-all
+                       hover:bg-neon/20 hover:shadow-[0_0_36px_-6px_rgba(56,242,196,0.7)]"
           >
-            Begin briefing
+            <IconPlay size={17} />
+            Play now
           </button>
         </section>
 
-        <footer className="mb-6 flex flex-wrap items-center justify-between gap-3 text-[10px] uppercase tracking-[0.2em] text-dim">
-          <span>Blackout &middot; The Subterfuge</span>
-          <div className="flex flex-wrap items-center gap-4">
-            <button onClick={onSupport} className="uppercase tracking-[0.2em] transition-colors hover:text-neon">
-              Support the game
-            </button>
-            <a
-              href="https://github.com/mkarjun/Blackout-TheSubterfuge"
-              target="_blank"
-              rel="noreferrer noopener"
-              className="transition-colors hover:text-neon"
-            >
-              Source on GitHub
-            </a>
+        {/* --------------------------------------------------------- footer */}
+        <footer className="mb-6 border-t border-edge pt-6">
+          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+            <div>
+              <div className="text-[12px] text-slate-300">Free, and staying free.</div>
+              <p className="mt-1 max-w-sm text-[11px] leading-relaxed text-dim">
+                No ads, no paywall, nothing locked. A coffee is the whole business model.
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <button
+                onClick={onSupport}
+                className="flex items-center gap-2 rounded border border-caution/50 bg-caution/10 px-4 py-2.5
+                           text-[12px] font-semibold text-caution transition-colors
+                           hover:border-caution hover:bg-caution/20"
+              >
+                <IconCoffee size={16} />
+                Buy me a coffee
+              </button>
+              <a
+                href="https://github.com/mkarjun/Blackout-TheSubterfuge"
+                target="_blank"
+                rel="noreferrer noopener"
+                className="flex items-center gap-2 rounded border border-edge px-4 py-2.5 text-[12px]
+                           text-slate-300 transition-colors hover:border-neon/50 hover:text-neon"
+              >
+                <IconGithub size={15} />
+                Source
+              </a>
+            </div>
+          </div>
+          <div className="mt-6 text-[10px] uppercase tracking-[0.2em] text-dim">
+            Blackout &middot; The Subterfuge
           </div>
         </footer>
       </div>
+
+      {showIosHelp && <IosInstallHelp onClose={() => setShowIosHelp(false)} />}
     </div>
+  );
+}
+
+/* ---------------------------------------------------------- iOS install */
+
+/**
+ * Safari has no install API, so the only honest thing to offer is the three taps
+ * that do it. Shown only on iOS, and only when the browser has not offered a real
+ * prompt of its own.
+ */
+function IosInstallHelp({ onClose }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/85 p-4 backdrop-blur-sm sm:items-center"
+      onClick={onClose}
+    >
+      <div className="panel w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-[15px] font-semibold text-slate-100">Add it to your home screen</h3>
+            <p className="mt-1 text-[11.5px] leading-relaxed text-dim">
+              It runs fullscreen and offline, without browser bars eating the floor.
+            </p>
+          </div>
+          <button onClick={onClose} aria-label="Close" className="p-1 text-dim hover:text-slate-200">
+            <IconClose size={16} />
+          </button>
+        </div>
+        <ol className="space-y-2.5">
+          {[
+            'Tap the Share button at the bottom of Safari.',
+            'Scroll down and choose "Add to Home Screen".',
+            'Tap Add. Blackout appears with your apps.',
+          ].map((line, i) => (
+            <li key={line} className="flex gap-3 text-[12.5px] leading-snug text-slate-300">
+              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-neon/50 text-[10px] text-neon">
+                {i + 1}
+              </span>
+              {line}
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------- mission options */
+
+/**
+ * The old briefing screen, folded into a disclosure. Everything here has a working
+ * default, so nobody has to open it - which is the point. Level and difficulty are
+ * chips rather than cards because at this size the blurbs were being skipped anyway.
+ */
+function MissionOptions({
+  levelId, difficulty, onSelectLevel, onSelectDifficulty,
+  onOpenApi, onOpenAuth, llmReady, provider,
+}) {
+  const level = LEVEL_LIST.find((l) => l.id === levelId) || LEVEL_LIST[0];
+  const diff = DIFFICULTIES[difficulty] || DIFFICULTIES[DIFFICULTY_ORDER[0]];
+
+  return (
+    <div className="panel mt-3 animate-slidein p-4">
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div>
+          <div className="panel-title mb-2">Facility</div>
+          <div className="flex flex-wrap gap-1.5">
+            {LEVEL_LIST.map((l) => (
+              <Chip key={l.id} selected={l.id === levelId} onClick={() => onSelectLevel(l.id)}>
+                {l.name}
+              </Chip>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] leading-snug text-dim">{level.brief}</p>
+        </div>
+
+        <div>
+          <div className="panel-title mb-2">How hard they are looking</div>
+          <div className="flex flex-wrap gap-1.5">
+            {DIFFICULTY_ORDER.map((id) => (
+              <Chip
+                key={id}
+                selected={id === difficulty}
+                tone="caution"
+                onClick={() => onSelectDifficulty(id)}
+              >
+                {DIFFICULTIES[id].label}
+              </Chip>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] leading-snug text-dim">{diff.blurb}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-edge pt-3">
+        <button className="btn flex items-center gap-1.5" onClick={onOpenApi}>
+          <IconSpark size={13} /> AI provider
+        </button>
+        <button className="btn" onClick={onOpenAuth}>Saves &amp; cloud sync</button>
+        <span className="ml-auto text-[10px] text-dim">
+          {llmReady
+            ? <>Dialogue written by <span className="text-neon">{provider}</span></>
+            : 'Dialogue written locally. Optional.'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function Chip({ children, selected, onClick, tone = 'neon' }) {
+  const on = tone === 'caution'
+    ? 'border-caution/70 bg-caution/10 text-caution'
+    : 'border-neon/70 bg-neon/10 text-neon';
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1.5 text-[11.5px] transition-colors ${
+        selected ? on : 'border-edge text-slate-400 hover:border-edge/80 hover:text-slate-200'
+      }`}
+    >
+      {children}
+    </button>
   );
 }

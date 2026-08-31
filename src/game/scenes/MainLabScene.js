@@ -32,6 +32,7 @@ import RemotePlayer from '../entities/RemotePlayer.js';
 import { MSG, buildSnapshot } from '../../net/protocol.js';
 import eventManager, { EVENTS } from '../systems/EventManager.js';
 import sfx from '../systems/Sfx.js';
+import touchInput from '../systems/TouchInput.js';
 import { compressEvent, pushSummary } from '../../services/promptBuilder.js';
 import {
   blankSession, saveSessionThrottled, flushPendingSave, appendEvent, loadLatestSession,
@@ -592,7 +593,8 @@ export class MainLabScene extends Phaser.Scene {
     // Abort with E. Playtesting found the old behaviour indefensible: the channel
     // locked you in place for ~3s with no way out, so a guard walking in mid-job was
     // an unavoidable loss rather than a moment you could react to. Progress is lost.
-    if (Phaser.Input.Keyboard.JustDown(this.player.keys.interact)) {
+    // Same abort on a phone: the Use button is the only one lit while a job runs.
+    if (Phaser.Input.Keyboard.JustDown(this.player.keys.interact) | touchInput.justDown('interact')) {
       const label = this.channel.label;
       this.channel = null;
       this.player.setDisabled(false);
@@ -1059,6 +1061,10 @@ export class MainLabScene extends Phaser.Scene {
       objectives: this._objectives(),
       inventory: [...this.inventory],
       sneaking: this.player.sneaking,
+      // Whoever is close enough to talk to. The interact prompt cannot answer this -
+      // it suppresses SPACE whenever a prop is nearer - and the touch Talk button
+      // needs to know whether it is live independently of what E is offering.
+      talkTarget: this._nearestNpc()?.npcName || null,
       channel: this.channel ? { label: this.channel.label, progress: this.channel.progress } : null,
       hackReadyIn: Math.max(0, Math.round((this.hackReadyAt - this.time.now) / 1000)),
       cognition: this.cognition.getStats(),
@@ -1068,11 +1074,18 @@ export class MainLabScene extends Phaser.Scene {
   /** Compact position payload. Kept tiny - it fires 15x a second. */
   _emitMinimap() {
     if (this.isPaused) return;
+    const cam = this.cameras.main;
+    // Where the player is *on screen*, in CSS px. The React HUD uses this to fade
+    // any panel the player walks under, so the body is never lost behind a window.
+    const sx = (this.player.x - cam.worldView.x) * cam.zoom;
+    const sy = (this.player.y - cam.worldView.y) * cam.zoom;
     eventManager.emit(EVENTS.MINIMAP, {
       levelId: this.levelId,
       px: this.player.x,
       py: this.player.y,
       pf: this.player.facing,
+      sx,
+      sy,
       dark: !this.state.lightsOn || this.darkRooms.size > 0,
       // NPC positions are deliberately not sent - the minimap shows layout and
       // objectives only, so the radar cannot replace actually watching the floor.

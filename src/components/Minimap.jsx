@@ -16,16 +16,26 @@ import {
  * The whole floor is shown rather than a player-centred scroll, and it deliberately
  * shows layout only - your position and your objectives. NPCs are NOT plotted: a radar
  * that tracks all five would do the work the vision cones, speech bubbles and footstep
- * noise are there to make you do, and would gut the tension of a blind corner. Scale is
- * chosen so the map's diagonal equals the circle's, which is the largest it can be
- * without the clip cutting the corner rooms off.
+ * noise are there to make you do, and would gut the tension of a blind corner.
  */
 
-const SIZE = 190;                       // CSS px
+const DEFAULT_SIZE = 190;               // CSS px
 const MAP_DIAGONAL = Math.hypot(MAP_W, MAP_H);
-const SCALE = SIZE / MAP_DIAGONAL;      // px per tile
-const OFFSET_X = (SIZE - MAP_W * SCALE) / 2;
-const OFFSET_Y = (SIZE - MAP_H * SCALE) / 2;
+
+/**
+ * Geometry for a given radar diameter. Scale is chosen so the map's diagonal equals
+ * the circle's, which is the largest it can be without the clip cutting the corner
+ * rooms off. On a phone the radar has to be smaller and moves to a corner the thumbs
+ * do not occupy, so none of this can be a module constant any more.
+ */
+function geometry(size) {
+  const scale = size / MAP_DIAGONAL;
+  return {
+    scale,
+    offsetX: (size - MAP_W * scale) / 2,
+    offsetY: (size - MAP_H * scale) / 2,
+  };
+}
 
 /** Per-room tint. Unlisted rooms fall back to a neutral floor colour. */
 const ROOM_TINT = {
@@ -46,8 +56,9 @@ const TILE_TINT = {
   [T.CRATE]: '#3d2f1c',
 };
 
-/** Rasterise one level's floor plan. Returns a canvas sized SIZE x SIZE in CSS px. */
-function buildTerrain(dpr, level) {
+/** Rasterise one level's floor plan. Returns a canvas sized `size` x `size` in CSS px. */
+function buildTerrain(dpr, level, size) {
+  const { scale: SCALE, offsetX: OFFSET_X, offsetY: OFFSET_Y } = geometry(size);
   const grid = buildMapData(level);
   const roomAtTile = new Map();
   for (const room of level.rooms) {
@@ -58,8 +69,8 @@ function buildTerrain(dpr, level) {
   }
 
   const canvas = document.createElement('canvas');
-  canvas.width = SIZE * dpr;
-  canvas.height = SIZE * dpr;
+  canvas.width = size * dpr;
+  canvas.height = size * dpr;
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
 
@@ -77,7 +88,7 @@ function buildTerrain(dpr, level) {
   return canvas;
 }
 
-export default function Minimap() {
+export default function Minimap({ size = DEFAULT_SIZE }) {
   const canvasRef = useRef(null);
   const terrainRef = useRef(null);
   const stateRef = useRef(null);
@@ -86,13 +97,15 @@ export default function Minimap() {
     const canvas = canvasRef.current;
     if (!canvas) return undefined;
 
+    const SIZE = size;
+    const { scale: SCALE, offsetX: OFFSET_X, offsetY: OFFSET_Y } = geometry(SIZE);
     const dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
     canvas.width = SIZE * dpr;
     canvas.height = SIZE * dpr;
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
     let builtLevel = getActiveLevel();
-    terrainRef.current = buildTerrain(dpr, builtLevel);
+    terrainRef.current = buildTerrain(dpr, builtLevel, SIZE);
 
     const toX = (worldX) => OFFSET_X + (worldX / TILE_SIZE) * SCALE;
     const toY = (worldY) => OFFSET_Y + (worldY / TILE_SIZE) * SCALE;
@@ -192,24 +205,26 @@ export default function Minimap() {
       // The floor plan changes with the level; re-rasterise only when it actually does.
       if (payload.levelId && payload.levelId !== builtLevel.id) {
         builtLevel = getLevel(payload.levelId);
-        terrainRef.current = buildTerrain(dpr, builtLevel);
+        terrainRef.current = buildTerrain(dpr, builtLevel, SIZE);
       }
       stateRef.current = payload;
       draw();
     }, { replay: true });
 
     return () => off();
-  }, []);
+  }, [size]);
 
   return (
-    <div className="relative" style={{ width: SIZE, height: SIZE }}>
+    <div className="relative" style={{ width: size, height: size }}>
       <canvas
         ref={canvasRef}
-        style={{ width: SIZE, height: SIZE, display: 'block' }}
+        style={{ width: size, height: size, display: 'block' }}
       />
-      <span className="pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-[0.2em] text-dim">
-        sublevel 3
-      </span>
+      {size >= 150 && (
+        <span className="pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-[0.2em] text-dim">
+          sublevel 3
+        </span>
+      )}
     </div>
   );
 }

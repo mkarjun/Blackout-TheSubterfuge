@@ -24,6 +24,24 @@
     image-rendering: pixelated;
   }
 
+  /*
+   * The play surface must not pan, pinch or double-tap-zoom under a thumb. Page zoom
+   * is deliberately left enabled globally (the landing page is a document people may
+   * need to enlarge) - this switches it off only where a finger is a control.
+   */
+  #game-root,
+  #game-root canvas {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* A tap on a control should never leave a lingering highlight or select text. */
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;

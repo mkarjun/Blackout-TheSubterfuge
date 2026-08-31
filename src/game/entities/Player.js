@@ -5,10 +5,15 @@
  * raised as a callback so MainLabScene owns the rules and the Player stays a
  * controller. Noise is modelled here because it is a function of *how* you move:
  * running broadcasts a point of interest that NPCs can path to, sneaking does not.
+ *
+ * Keyboard and the virtual stick are read side by side rather than through a mode
+ * switch, so a tablet with a keyboard attached can use both and neither path has to
+ * know the other exists.
  */
 
 import Phaser from 'phaser';
 import { TILE_SIZE } from '../../assets/tilemaps/labMap.js';
+import touch from '../systems/TouchInput.js';
 
 export const PLAYER_SPEED = {
   WALK: 198,
@@ -97,16 +102,30 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const up = k.up.isDown || c.up.isDown;
     const down = k.down.isDown || c.down.isDown;
 
-    this.sneaking = k.sneak.isDown;
+    this.sneaking = k.sneak.isDown || touch.isSneaking();
     const speed = this.sneaking ? PLAYER_SPEED.SNEAK : PLAYER_SPEED.WALK;
 
     let vx = (right ? 1 : 0) - (left ? 1 : 0);
     let vy = (down ? 1 : 0) - (up ? 1 : 0);
 
+    // The stick only speaks up when the keys are silent, so a stray thumb cannot
+    // fight the keyboard on a device that has both.
+    let throttle = 1;
+    if (!vx && !vy) {
+      const stick = touch.axis();
+      if (stick.magnitude > 0) {
+        vx = stick.x;
+        vy = stick.y;
+        // Analog: a half-pushed stick is a genuine half-speed creep, which is the
+        // only way a phone player gets fine control without a modifier key.
+        throttle = stick.magnitude;
+      }
+    }
+
     if (vx || vy) {
       const len = Math.hypot(vx, vy);
-      vx = (vx / len) * speed;
-      vy = (vy / len) * speed;
+      vx = (vx / len) * speed * throttle;
+      vy = (vy / len) * speed * throttle;
       this.facing = Math.atan2(vy, vx);
       this._emitNoise(delta);
     } else {
@@ -154,7 +173,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
   }
 
-  /** Walking leaks a periodic point of interest; sneaking leaks nothing. */
+  /**
+   * Walking leaks a periodic point of interest; sneaking leaks nothing. A stick
+   * eased under half deflection is treated as sneaking for noise too - otherwise
+   * creeping on a phone would be silent-looking but loud.
+   */
   _emitNoise(delta) {
     const radius = this.sneaking ? NOISE_RADIUS.SNEAK : NOISE_RADIUS.WALK;
     if (!radius) return;
@@ -166,10 +189,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   _pollActions() {
     const k = this.keys;
-    if (Phaser.Input.Keyboard.JustDown(k.interact)) this.handlers.onInteract?.();
-    if (Phaser.Input.Keyboard.JustDown(k.plant)) this.handlers.onPlant?.();
-    if (Phaser.Input.Keyboard.JustDown(k.hack)) this.handlers.onHack?.();
-    if (Phaser.Input.Keyboard.JustDown(k.talk)) this.handlers.onTalk?.();
+    // Both sides are consuming reads, and both must run - `||` would short-circuit
+    // and leave a queued touch edge unconsumed after a keypress.
+    const key = Phaser.Input.Keyboard.JustDown;
+    if (key(k.interact) | touch.justDown('interact')) this.handlers.onInteract?.();
+    if (key(k.plant) | touch.justDown('plant')) this.handlers.onPlant?.();
+    if (key(k.hack) | touch.justDown('hack')) this.handlers.onHack?.();
+    if (key(k.talk) | touch.justDown('talk')) this.handlers.onTalk?.();
   }
 
   destroy(fromScene) {

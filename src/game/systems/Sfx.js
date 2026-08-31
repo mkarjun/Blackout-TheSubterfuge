@@ -1,6 +1,11 @@
 /**
  * Sfx.js - Procedural WebAudio effects. No audio files, no loading, no licences.
  *
+ * The one thing here that is not procedural is the music, and it deliberately lives
+ * elsewhere (systems/Music.js) - but it shares this module's AudioContext and routes
+ * through the same master gain, so unlock, mute and volume cover both with no second
+ * code path and no second context competing for the output device.
+ *
  * The typewriter blip is the one that matters: it fires per character as speech
  * bubbles stream, so it must be allocation-light and must never queue up. Every
  * effect is a short oscillator + gain envelope that disconnects itself on stop.
@@ -28,6 +33,20 @@ function ensureContext() {
 }
 
 /** Call from any real user gesture (keydown / pointerdown). Safe to call repeatedly. */
+/** The shared context, so Music can decode into it. Null before the first unlock. */
+export function getContext() {
+  return ensureContext();
+}
+
+/**
+ * The shared output bus. Everything muted by setMuted() is muted because it is
+ * downstream of this node.
+ */
+export function getMaster() {
+  ensureContext();
+  return master;
+}
+
 export function unlock() {
   const c = ensureContext();
   if (!c) return false;
@@ -93,6 +112,8 @@ export const sfx = {
   setMuted,
   isMuted,
   setVolume,
+  getContext,
+  getMaster,
   blip,
   interact: () => tone({ freq: 660, dur: 0.09, type: 'triangle', gain: 0.16, sweepTo: 880 }),
   pickup: () => {

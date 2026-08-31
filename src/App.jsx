@@ -7,30 +7,31 @@ import {
   loadLlmConfig, flushPendingSave, getSetting, setSetting, SETTINGS_KEYS,
 } from './services/memoryStore.js';
 import { LEVEL_LIST } from './assets/tilemaps/labMap.js';
-import { DIFFICULTIES, DIFFICULTY_ORDER, DEFAULT_DIFFICULTY } from './game/difficulty.js';
+import { DEFAULT_DIFFICULTY } from './game/difficulty.js';
 import sfx from './game/systems/Sfx.js';
+import music from './game/systems/Music.js';
 import GameOverlay from './components/GameOverlay.jsx';
 import ApiConfigModal from './components/ApiConfigModal.jsx';
 import AuthModal from './components/AuthModal.jsx';
 import LandingPage from './components/LandingPage.jsx';
 import LobbyPanel from './components/LobbyPanel.jsx';
 import SupportPanel from './components/SupportPanel.jsx';
+import { enterImmersive, exitImmersive, useIsTouch } from './components/useDevice.js';
 
-const CONTROLS = [
-  ['WASD / Arrows', 'Move'],
-  ['Shift', 'Sneak - quieter, harder to spot'],
-  ['E', 'Interact / sabotage'],
-  ['F', 'Plant evidence'],
-  ['H', 'Hack lights (facility-wide at a breaker)'],
-  ['Space', 'Talk to whoever is closest'],
-  ['Esc', 'Pause'],
-];
+/**
+ * App - phase machine and Phaser lifecycle owner.
+ *
+ * boot -> landing -> playing, with lobby as the multiplayer detour. The "briefing"
+ * phase that used to sit between landing and playing is gone; Play starts a run on
+ * the last-used settings and the settings live in a landing-page disclosure.
+ */
 
 export default function App() {
   const hostRef = useRef(null);
   const startedRef = useRef(false);
+  const isTouch = useIsTouch();
 
-  // boot -> landing (the pitch) -> briefing (loadout) -> playing
+  // boot -> landing (the pitch) -> playing. lobby is the multiplayer detour.
   const [phase, setPhase] = useState('boot');
   const [resume, setResume] = useState(null);
   const [showApi, setShowApi] = useState(false);
@@ -56,6 +57,8 @@ export default function App() {
       setResume(resumable);
       setLlmReady(llmClient.isConfigured());
       setPhase('landing');
+      // Pull the score down while they read the page, so Play does not wait on it.
+      music.preload();
     })();
     return () => { cancelled = true; };
   }, []);
@@ -69,20 +72,24 @@ export default function App() {
 
   const startGame = useCallback((resumeData) => {
     sfx.unlock();
+    // Fullscreen and the orientation lock both require a user gesture, so they have
+    // to be requested here, inside the click, and not from the phase effect below.
+    if (isTouch) enterImmersive(document.documentElement);
     setPendingResume(resumeData || null);
     setNetSession(null);
     setPhase('playing');
-  }, []);
+  }, [isTouch]);
 
   /** Host pressed start, or a guest received START. Same path either way. */
   const launchMultiplayer = useCallback((session, msg) => {
     sfx.unlock();
+    if (isTouch) enterImmersive(document.documentElement);
     if (msg?.levelId) setLevelId(msg.levelId);
     if (msg?.difficulty) setDifficulty(msg.difficulty);
     setPendingResume(null);
     setNetSession(session);
     setPhase('playing');
-  }, []);
+  }, [isTouch]);
 
   // Remember the menu selection between sessions.
   useEffect(() => {
@@ -98,14 +105,22 @@ export default function App() {
     createGame(hostRef.current, { resume: pendingResume, levelId, difficulty, net: netSession });
   }, [phase, pendingResume, levelId, difficulty, netSession]);
 
+  // The score follows the run, not the app: silence on the title screen, fade in
+  // when a floor loads, fade out on the way back out.
+  useEffect(() => {
+    if (phase === 'playing') music.start();
+    else music.stop();
+  }, [phase]);
+
   useEffect(() => () => {
     destroyGame();
+    music.dispose();
     flushPendingSave().catch(() => {});
   }, []);
 
   // Any real gesture unlocks WebAudio; browsers refuse to play before one.
   useEffect(() => {
-    const unlock = () => sfx.unlock();
+    const unlock = () => { sfx.unlock(); music.unlock(); };
     window.addEventListener('pointerdown', unlock, { once: true });
     window.addEventListener('keydown', unlock, { once: true });
     return () => {
@@ -131,11 +146,13 @@ export default function App() {
     await flushPendingSave().catch(() => {});
     destroyGame();
     startedRef.current = false;
+    // The title screen is a document: give the browser chrome and the rotation back.
+    if (isTouch) exitImmersive();
     setPhase('landing');
     // Re-read the save so the title screen offers Resume straight away.
     const resumable = await loadResumePayload();
     setResume(resumable);
-  }, []);
+  }, [isTouch]);
 
   /* ---------------------------------------------------------------- render */
 
@@ -150,19 +167,26 @@ export default function App() {
             onRestart={handleRestart}
             onExit={handleExit}
             onOpenSupport={() => setShowSupport(true)}
+            modalOpen={showApi || showAuth || showSupport}
           />
         </>
       )}
 
-      {phase === 'landing' && (
+      {(phase === 'landing' || phase === 'boot') && (
         <LandingPage
           resume={resume}
           llmReady={llmReady}
           provider={llmClient.getConfig().model}
-          onStart={() => setPhase('briefing')}
+          levelId={levelId}
+          difficulty={difficulty}
+          onSelectLevel={setLevelId}
+          onSelectDifficulty={setDifficulty}
+          onPlay={() => startGame(null)}
           onRival={() => setPhase('lobby')}
           onResume={() => startGame(resume)}
           onSupport={() => setShowSupport(true)}
+          onOpenApi={() => setShowApi(true)}
+          onOpenAuth={() => setShowAuth(true)}
         />
       )}
 
@@ -177,152 +201,9 @@ export default function App() {
         />
       )}
 
-      {(phase === 'boot' || phase === 'briefing') && (
-        <BriefingScreen
-          phase={phase}
-          resume={resume}
-          llmReady={llmReady}
-          levelId={levelId}
-          difficulty={difficulty}
-          onSelectLevel={setLevelId}
-          onSelectDifficulty={setDifficulty}
-          onNew={() => startGame(null)}
-          onResume={() => startGame(resume)}
-          onOpenApi={() => setShowApi(true)}
-          onOpenAuth={() => setShowAuth(true)}
-          onBack={() => setPhase('landing')}
-        />
-      )}
-
       {showApi && <ApiConfigModal onClose={() => setShowApi(false)} />}
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
       {showSupport && <SupportPanel onClose={() => setShowSupport(false)} />}
-    </div>
-  );
-}
-
-/* --------------------------------------------------------- briefing screen */
-
-function BriefingScreen({
-  phase, resume, llmReady, levelId, difficulty,
-  onSelectLevel, onSelectDifficulty, onNew, onResume, onOpenApi, onOpenAuth, onBack,
-}) {
-  const cfg = llmClient.getConfig();
-
-  return (
-    <div className="flex h-full w-full items-center justify-center overflow-y-auto p-6">
-      <div className="w-full max-w-4xl">
-        <div className="mb-8">
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="mb-4 text-[10px] uppercase tracking-[0.2em] text-dim transition-colors hover:text-neon"
-            >
-              &larr; Back
-            </button>
-          )}
-          <div className="text-[11px] uppercase tracking-[0.4em] text-neon/70">Mission briefing</div>
-          <h1 className="mt-2 text-4xl font-bold tracking-tight text-slate-100">
-            Pick your floor<span className="text-neon">.</span>
-          </h1>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-dim">
-            Three systems to sabotage, then the exit. The staff decide for themselves who did it.
-          </p>
-        </div>
-
-        {/* level select */}
-        <div className="mb-4">
-          <div className="panel-title mb-2">Facility</div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {LEVEL_LIST.map((level) => {
-              const selected = level.id === levelId;
-              return (
-                <button
-                  key={level.id}
-                  onClick={() => onSelectLevel(level.id)}
-                  className={`panel p-3 text-left transition-colors ${
-                    selected ? 'border-neon/70 bg-neon/5' : 'hover:border-edge/80'
-                  }`}
-                >
-                  <div className="flex items-baseline justify-between">
-                    <span className={`text-[13px] font-semibold ${selected ? 'text-neon' : 'text-slate-200'}`}>
-                      {level.name}
-                    </span>
-                    <span className="text-[10px] text-dim">0{level.index}</span>
-                  </div>
-                  <div className="text-[10px] uppercase tracking-widest text-dim">{level.subtitle}</div>
-                  <p className="mt-1.5 text-[11px] leading-snug text-slate-400">{level.brief}</p>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* difficulty select */}
-        <div className="mb-4">
-          <div className="panel-title mb-2">Difficulty</div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {DIFFICULTY_ORDER.map((id) => {
-              const d = DIFFICULTIES[id];
-              const selected = id === difficulty;
-              return (
-                <button
-                  key={id}
-                  onClick={() => onSelectDifficulty(id)}
-                  className={`panel p-3 text-left transition-colors ${
-                    selected ? 'border-caution/70 bg-caution/5' : 'hover:border-edge/80'
-                  }`}
-                >
-                  <div className={`text-[13px] font-semibold ${selected ? 'text-caution' : 'text-slate-200'}`}>
-                    {d.label}
-                  </div>
-                  <p className="mt-1 text-[11px] leading-snug text-slate-400">{d.blurb}</p>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-[1fr_260px]">
-          <div className="panel p-4">
-            <div className="panel-title mb-3">Controls</div>
-            <dl className="grid grid-cols-1 gap-1.5 text-[12px] sm:grid-cols-2">
-              {CONTROLS.map(([key, label]) => (
-                <div key={key} className="flex items-baseline gap-2">
-                  <dt className="min-w-[104px] shrink-0 text-neon/80">{key}</dt>
-                  <dd className="text-slate-400">{label}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-
-          <div className="panel flex flex-col gap-2 p-4">
-            <div className="panel-title mb-1">Start</div>
-            <button className="btn-primary" onClick={onNew} disabled={phase === 'boot'}>
-              {phase === 'boot' ? 'Loading...' : 'New run'}
-            </button>
-            <button className="btn" onClick={onResume} disabled={!resume}>
-              {resume ? `Resume ${LEVEL_LIST.find((l) => l.id === resume.levelId)?.name || 'last run'}` : 'No saved run'}
-            </button>
-            <div className="my-1 h-px bg-edge" />
-            <button className="btn" onClick={onOpenApi}>AI provider</button>
-            <button className="btn" onClick={onOpenAuth}>Saves &amp; cloud sync</button>
-
-            <div className="mt-2 text-[10px] leading-relaxed text-dim">
-              {llmReady ? (
-                <>
-                  Cognition: <span className="text-neon">{cfg.provider}</span> / {cfg.model}
-                </>
-              ) : (
-                <>
-                  Cognition: <span className="text-caution">rule-based only</span>. The game is fully
-                  playable; connect a provider for improvised dialogue.
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

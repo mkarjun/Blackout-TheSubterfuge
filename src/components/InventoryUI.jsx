@@ -2,10 +2,13 @@ import React from 'react';
 import { ITEMS } from '../assets/tilemaps/labMap.js';
 
 /**
- * InventoryUI - carried items and the run checklist.
+ * InventoryUI - the run checklist and whatever you are carrying.
  *
- * Objectives are shown as three sabotage targets plus the exit, because the exit is
- * gated on the other three and players need to see that gate before they walk to it.
+ * Renders bare content; the surrounding HudPanel owns the frame, title and n/3 badge.
+ *
+ * The exit is listed alongside the three sabotage targets rather than appearing once
+ * they are done: a player needs to see the door is the fourth step before walking to
+ * it and finding it shut.
  */
 
 const OBJECTIVE_LABELS = [
@@ -18,12 +21,7 @@ export default function InventoryUI({ inventory = [], objectives = {} }) {
   const done = objectives.done || 0;
 
   return (
-    <div className="panel w-64 p-3">
-      <div className="mb-2 flex items-baseline justify-between">
-        <span className="panel-title">Run</span>
-        <span className="text-[10px] text-dim">{done}/3 systems</span>
-      </div>
-
+    <div>
       <ul className="space-y-1">
         {OBJECTIVE_LABELS.map(([key, label]) => {
           const complete = Boolean(objectives[key]);
@@ -50,10 +48,12 @@ export default function InventoryUI({ inventory = [], objectives = {} }) {
         </li>
       </ul>
 
-      <div className="mt-3 border-t border-edge pt-2">
+      <div className="mt-2.5 border-t border-edge pt-2">
         <div className="panel-title mb-1.5">Carrying</div>
         {inventory.length === 0 ? (
-          <div className="text-[11px] text-dim">Nothing. Lab A and the Atrium have something worth taking.</div>
+          <div className="text-[11px] leading-snug text-dim">
+            Nothing. Lab A and the Atrium have something worth taking.
+          </div>
         ) : (
           <ul className="space-y-1">
             {inventory.map((id, i) => {
