@@ -1,0 +1,19 @@
+# Normalise line endings.
+#
+# Development happens on Windows but Workers Builds compiles on Linux and the repo is
+# public, so without this every file committed from Windows shows up as wholly changed
+# to anyone on another platform. `text=auto eol=lf` stores LF in git and checks out
+# whatever the local platform wants.
+* text=auto eol=lf
+
+# Never touch binaries.
+*.png binary
+*.jpg binary
+*.gif binary
+*.woff binary
+*.woff2 binary
+*.mp3 binary
+*.ogg binary
+
+# Generated - collapse in diffs and exclude from language stats.
+package-lock.json linguist-generated=true -diff
