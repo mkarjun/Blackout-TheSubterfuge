@@ -12,6 +12,7 @@ import sfx from './game/systems/Sfx.js';
 import GameOverlay from './components/GameOverlay.jsx';
 import ApiConfigModal from './components/ApiConfigModal.jsx';
 import AuthModal from './components/AuthModal.jsx';
+import LandingPage from './components/LandingPage.jsx';
 
 const CONTROLS = [
   ['WASD / Arrows', 'Move'],
@@ -27,7 +28,8 @@ export default function App() {
   const hostRef = useRef(null);
   const startedRef = useRef(false);
 
-  const [phase, setPhase] = useState('boot');      // boot | menu | playing
+  // boot -> landing (the pitch) -> briefing (loadout) -> playing
+  const [phase, setPhase] = useState('boot');
   const [resume, setResume] = useState(null);
   const [showApi, setShowApi] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
@@ -50,7 +52,7 @@ export default function App() {
       if (gameplay?.difficulty) setDifficulty(gameplay.difficulty);
       setResume(resumable);
       setLlmReady(llmClient.isConfigured());
-      setPhase('menu');
+      setPhase('landing');
     })();
     return () => { cancelled = true; };
   }, []);
@@ -114,7 +116,7 @@ export default function App() {
     await flushPendingSave().catch(() => {});
     destroyGame();
     startedRef.current = false;
-    setPhase('menu');
+    setPhase('landing');
     // Re-read the save so the title screen offers Resume straight away.
     const resumable = await loadResumePayload();
     setResume(resumable);
@@ -136,8 +138,18 @@ export default function App() {
         </>
       )}
 
-      {phase !== 'playing' && (
-        <StartScreen
+      {phase === 'landing' && (
+        <LandingPage
+          resume={resume}
+          llmReady={llmReady}
+          provider={llmClient.getConfig().model}
+          onStart={() => setPhase('briefing')}
+          onResume={() => startGame(resume)}
+        />
+      )}
+
+      {(phase === 'boot' || phase === 'briefing') && (
+        <BriefingScreen
           phase={phase}
           resume={resume}
           llmReady={llmReady}
@@ -149,6 +161,7 @@ export default function App() {
           onResume={() => startGame(resume)}
           onOpenApi={() => setShowApi(true)}
           onOpenAuth={() => setShowAuth(true)}
+          onBack={() => setPhase('landing')}
         />
       )}
 
@@ -158,11 +171,11 @@ export default function App() {
   );
 }
 
-/* ------------------------------------------------------------ start screen */
+/* --------------------------------------------------------- briefing screen */
 
-function StartScreen({
+function BriefingScreen({
   phase, resume, llmReady, levelId, difficulty,
-  onSelectLevel, onSelectDifficulty, onNew, onResume, onOpenApi, onOpenAuth,
+  onSelectLevel, onSelectDifficulty, onNew, onResume, onOpenApi, onOpenAuth, onBack,
 }) {
   const cfg = llmClient.getConfig();
 
@@ -170,14 +183,20 @@ function StartScreen({
     <div className="flex h-full w-full items-center justify-center overflow-y-auto p-6">
       <div className="w-full max-w-4xl">
         <div className="mb-8">
-          <div className="text-[11px] uppercase tracking-[0.4em] text-neon/70">Halden Institute - Sublevel 3</div>
-          <h1 className="mt-2 text-5xl font-bold tracking-tight text-slate-100">
-            BLACKOUT<span className="text-neon">:</span> The Subterfuge
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="mb-4 text-[10px] uppercase tracking-[0.2em] text-dim transition-colors hover:text-neon"
+            >
+              &larr; Back
+            </button>
+          )}
+          <div className="text-[11px] uppercase tracking-[0.4em] text-neon/70">Mission briefing</div>
+          <h1 className="mt-2 text-4xl font-bold tracking-tight text-slate-100">
+            Pick your floor<span className="text-neon">.</span>
           </h1>
-          <p className="mt-3 max-w-xl text-sm leading-relaxed text-dim">
-            You have one night cycle inside a sealed research lab. Kill three systems, walk out the
-            blast door, and make sure the five people down here blame somebody else. They talk to
-            each other. They remember what you said. They form their own theories.
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-dim">
+            Three systems to sabotage, then the exit. The staff decide for themselves who did it.
           </p>
         </div>
 
