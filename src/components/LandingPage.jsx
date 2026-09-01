@@ -477,23 +477,41 @@ export default function LandingPage({
             </button>
           </div>
 
-          {/* The mission line: says what Play will do, and folds open if you care. */}
-          <div className="mt-4 max-w-2xl">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-dim">
-              <span className="text-slate-400">{level.name}</span>
-              <span className="text-edge">/</span>
-              <span className="text-slate-400">{diff.label}</span>
-              <span className="text-edge">/</span>
-              <span>about six minutes</span>
-              <button
-                onClick={() => setShowOptions((v) => !v)}
-                className="ml-1 flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-neon/80
-                           transition-colors hover:text-neon"
+          {/*
+            The mission row. This started as a grey sentence with the word "Change"
+            at the end of it and nobody saw it, which meant two floors and two
+            difficulties may as well not have shipped. It is a bordered control now,
+            it names what it will change, and it says how many alternatives are behind
+            it - the number is what makes it worth a tap.
+          */}
+          <div className="mt-5 max-w-2xl">
+            <button
+              onClick={() => setShowOptions((v) => !v)}
+              aria-expanded={showOptions}
+              className={`group flex w-full items-center gap-3 rounded border px-4 py-3 text-left
+                          transition-colors sm:w-auto ${
+                showOptions
+                  ? 'border-neon/60 bg-neon/5'
+                  : 'border-edge bg-panel/50 hover:border-neon/50 hover:bg-neon/5'
+              }`}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-[9.5px] uppercase tracking-[0.22em] text-dim">Mission</div>
+                <div className="mt-0.5 truncate text-[13px] text-slate-200">
+                  {level.name}
+                  <span className="text-edge"> / </span>
+                  <span className="text-caution">{diff.label}</span>
+                  <span className="text-dim"> / ~6 min</span>
+                </div>
+              </div>
+              <span
+                className="flex shrink-0 items-center gap-1.5 rounded border border-neon/40 bg-neon/10
+                           px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-neon"
               >
-                {showOptions ? 'Hide' : 'Change'}
-                <IconChevron open={showOptions} size={12} />
-              </button>
-            </div>
+                {showOptions ? 'Done' : '3 floors, 3 levels'}
+                <IconChevron open={showOptions} size={13} />
+              </span>
+            </button>
 
             {showOptions && (
               <MissionOptions
@@ -509,7 +527,7 @@ export default function LandingPage({
             )}
           </div>
 
-          <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px] uppercase tracking-[0.18em] text-dim">
+          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px] uppercase tracking-[0.18em] text-dim">
             <span>Runs in the browser</span>
             <span className="text-edge">/</span>
             <span>No account</span>

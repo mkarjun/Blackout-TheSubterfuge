@@ -49,13 +49,14 @@ const STEPS = [
     title: 'Hold at a marked system',
     touchTitle: 'Stand on a marked system and tap Use',
     body: 'Three of them on this floor. The radar bottom-right shows where. Do not get watched doing it.',
-    touchBody: 'Three of them on this floor - the radar shows where. Do not get watched doing it.',
+    touchBody: 'Three on this floor - the radar top right shows where. Do not get watched doing it.',
   },
   {
     id: 'read',
     key: null,
     title: 'Now watch the theory',
     body: 'Top right is who blames whom. Purple lines between them are good for you. Lines pointing at the middle are not.',
+    touchBody: 'Tap the clipboard, top right, for objectives and who is blaming whom. Purple lines between them are good for you.',
     autoAdvanceMs: 9000,
   },
 ];

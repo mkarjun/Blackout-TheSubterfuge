@@ -8,11 +8,12 @@ import SuspicionWeb from './SuspicionWeb.jsx';
 import FirstRunCoach from './FirstRunCoach.jsx';
 import TouchControls from './TouchControls.jsx';
 import RotateHint from './RotateHint.jsx';
+import IntelSheet from './IntelSheet.jsx';
 import { useIsTouch, useIsPortrait } from './useDevice.js';
 import sfx from '../game/systems/Sfx.js';
 import {
   IconCoffee, IconPlay, IconPause, IconEye, IconEyeOff, IconSound, IconMuted,
-  IconGear, IconRestart, IconExit, IconSpark, IconCloud, IconUsers,
+  IconGear, IconRestart, IconExit, IconSpark, IconCloud, IconUsers, IconIntel,
 } from './Icons.jsx';
 
 /**
@@ -67,6 +68,7 @@ export default function GameOverlay({
   const [muted, setMuted] = useState(sfx.isMuted());
   const [menuOpen, setMenuOpen] = useState(false);
   const [coachStep, setCoachStep] = useState(-1);
+  const [intelOpen, setIntelOpen] = useState(false);
   const viewport = useViewport();
   const isTouch = useIsTouch();
   const isPortrait = useIsPortrait();
@@ -108,13 +110,14 @@ export default function GameOverlay({
   const explicitPause = useRef(false);
   useEffect(() => { explicitPause.current = paused; }, [paused]);
 
+  const freeze = modalOpen || intelOpen;
   useEffect(() => {
-    if (!modalOpen || gameOver) return undefined;
+    if (!freeze || gameOver) return undefined;
     eventManager.emit(EVENTS.REQUEST_PAUSE);
     return () => {
       if (!explicitPause.current) eventManager.emit(EVENTS.REQUEST_RESUME);
     };
-  }, [modalOpen, gameOver]);
+  }, [freeze, gameOver]);
 
   const toggleHud = useCallback(() => {
     setHudVisible((prev) => {
@@ -137,8 +140,9 @@ export default function GameOverlay({
       // Never steal a key from a text field - the dialogue input lives in this tree.
       const tag = e.target?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
-      // A modal owns the keyboard while it is up; it closes itself on Escape.
-      if (modalOpen) return;
+      // A modal or the intel sheet owns the keyboard while it is up; each closes
+      // itself on Escape.
+      if (modalOpen || intelOpen) return;
 
       if (e.key === 'Tab') {
         e.preventDefault();
@@ -153,7 +157,7 @@ export default function GameOverlay({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [togglePause, toggleHud, dialogueOpen, menuOpen, modalOpen]);
+  }, [togglePause, toggleHud, dialogueOpen, menuOpen, modalOpen, intelOpen]);
 
   useEffect(() => {
     if (gameOver) setPaused(false);
@@ -168,35 +172,59 @@ export default function GameOverlay({
   //     what keeps the coach card from colliding with a gutter on a small screen.
   const coaching = coachStep >= 0 && coachStep < 2;
   const panelsHidden = !hudVisible || dialogueOpen || coaching;
+  // On touch the gutters are replaced wholesale by the intel sheet rather than
+  // being shrunk: two 250px columns on a 740px screen is most of the screen.
+  const showGutters = !isTouch;
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none">
       {/* ------------------------------------------------------- status rail */}
-      <StatusRail tick={tick} alert={alert} hidden={!hudVisible} />
+      {/*
+        `hudVisible` governs the gutters. On touch there are no gutters and no eye
+        button to toggle them back, so the clock, the room and the heat must not hang
+        off it - they are the only readout on screen between the radar and the
+        intel sheet.
+      */}
+      <StatusRail tick={tick} alert={alert} hidden={!isTouch && !hudVisible} />
 
       {/* ----------------------------------------------------------- toolbar */}
       <div className="pointer-events-auto absolute right-2 top-2 flex items-center gap-1 sm:right-3 sm:top-3">
-        <IconButton label="Support the game" tone="support" onClick={onOpenSupport}>
+        {isTouch && (
+          <IconButton
+            label="Objectives and suspicion"
+            tone="primary"
+            big
+            onClick={() => setIntelOpen(true)}
+            badge={`${tick?.objectives?.done ?? 0}/3`}
+          >
+            <IconIntel />
+          </IconButton>
+        )}
+
+        <IconButton label="Support the game" tone="support" big={isTouch} onClick={onOpenSupport}>
           <IconCoffee />
         </IconButton>
 
         <div className="mx-1 h-5 w-px bg-edge" />
 
-        <IconButton label={hudVisible ? 'Hide panels (Tab)' : 'Show panels (Tab)'} onClick={toggleHud}>
-          {hudVisible ? <IconEye /> : <IconEyeOff />}
-        </IconButton>
+        {!isTouch && (
+          <IconButton label={hudVisible ? 'Hide panels (Tab)' : 'Show panels (Tab)'} onClick={toggleHud}>
+            {hudVisible ? <IconEye /> : <IconEyeOff />}
+          </IconButton>
+        )}
         <IconButton
           label={muted ? 'Unmute' : 'Mute'}
+          big={isTouch}
           onClick={() => { sfx.setMuted(!muted); setMuted(!muted); }}
         >
           {muted ? <IconMuted /> : <IconSound />}
         </IconButton>
-        <IconButton label={paused ? 'Resume (Esc)' : 'Pause (Esc)'} onClick={togglePause}>
+        <IconButton label={paused ? 'Resume (Esc)' : 'Pause (Esc)'} big={isTouch} onClick={togglePause}>
           {paused ? <IconPlay /> : <IconPause />}
         </IconButton>
 
         <div className="relative">
-          <IconButton label="Settings" onClick={() => setMenuOpen((v) => !v)} active={menuOpen}>
+          <IconButton label="Settings" big={isTouch} onClick={() => setMenuOpen((v) => !v)} active={menuOpen}>
             <IconGear />
           </IconButton>
           {menuOpen && (
@@ -213,6 +241,7 @@ export default function GameOverlay({
       </div>
 
       {/* ------------------------------------------------------- left gutter */}
+      {showGutters && (
       <div className={`absolute left-3 top-16 flex max-w-[calc(50vw-16px)] w-[250px] min-h-0 flex-col gap-2 overflow-hidden ${gutterBottom}`}>
         <HudPanel
           id="run"
@@ -233,8 +262,10 @@ export default function GameOverlay({
           <EventFeed />
         </HudPanel>
       </div>
+      )}
 
       {/* ------------------------------------------------------ right gutter */}
+      {showGutters && (
       <div className={`absolute right-3 flex max-w-[calc(50vw-16px)] w-[268px] min-h-0 flex-col items-end gap-2 overflow-hidden ${rightGutterTop} ${gutterBottom}`}>
         <HudPanel
           id="web"
@@ -259,18 +290,21 @@ export default function GameOverlay({
           <CognitionStrip stats={tick?.cognition} />
         </HudPanel>
 
-        {!isTouch && (
-          <>
-            <div className="flex-1" />
-            <MinimapDock hidden={!hudVisible} size={radarSize} />
-          </>
-        )}
+        <div className="flex-1" />
+        <MinimapDock hidden={!hudVisible} size={radarSize} />
       </div>
+      )}
 
-      {/* On a phone the radar gets its own dock under the toolbar, clear of both thumbs. */}
+      {/*
+        On a phone the radar gets its own dock under the toolbar, clear of both
+        thumbs - and it is always on. `hudVisible` governs the gutters, which do not
+        exist on touch, and the eye button that would toggle it back is not in the
+        touch toolbar either. Gating the radar on it stranded the only navigation aid
+        the player has behind a control they cannot reach.
+      */}
       {isTouch && (
         <div className="absolute right-2 top-14">
-          <MinimapDock hidden={!hudVisible} size={radarSize} />
+          <MinimapDock hidden={false} size={radarSize} />
         </div>
       )}
 
@@ -284,7 +318,12 @@ export default function GameOverlay({
       <FirstRunCoach active={!gameOver && !paused} onStep={setCoachStep} touch={isTouch} />
 
       {isTouch && (
-        <TouchControls hidden={paused || Boolean(gameOver) || dialogueOpen || isPortrait} />
+        <TouchControls
+          hidden={paused || Boolean(gameOver) || dialogueOpen || isPortrait || intelOpen}
+        />
+      )}
+      {isTouch && (
+        <IntelSheet open={intelOpen} onClose={() => setIntelOpen(false)} tick={tick} />
       )}
       {isTouch && isPortrait && <RotateHint />}
 
@@ -361,9 +400,12 @@ function MinimapDock({ hidden, size }) {
   );
 }
 
-function IconButton({ children, label, onClick, tone = 'default', active = false }) {
+function IconButton({
+  children, label, onClick, tone = 'default', active = false, big = false, badge = null,
+}) {
   const tones = {
     default: 'border-edge bg-panel/85 text-slate-300 hover:border-neon/60 hover:text-neon',
+    primary: 'border-neon/60 bg-neon/10 text-neon hover:bg-neon/20',
     support: 'border-caution/50 bg-caution/10 text-caution hover:border-caution hover:bg-caution/20',
     danger: 'border-alarm/50 bg-alarm/10 text-alarm hover:bg-alarm/20',
   };
@@ -373,10 +415,18 @@ function IconButton({ children, label, onClick, tone = 'default', active = false
       onClick={onClick}
       aria-label={label}
       title={label}
-      className={`group relative grid h-8 w-8 place-items-center rounded border backdrop-blur-sm
-                  transition-colors ${tones[tone]} ${active ? 'border-neon/60 text-neon' : ''}`}
+      // 40px on touch: 32 is below every thumb-target guideline there is.
+      className={`group relative grid place-items-center rounded border backdrop-blur-sm
+                  transition-colors ${big ? 'h-10 w-10' : 'h-8 w-8'}
+                  ${tones[tone]} ${active ? 'border-neon/60 text-neon' : ''}`}
     >
       {children}
+      {badge && (
+        <span className="absolute -bottom-1 -right-1 rounded-sm border border-edge bg-panel px-1
+                         text-[8px] leading-[1.4] tabular-nums text-slate-300">
+          {badge}
+        </span>
+      )}
       <span
         className="pointer-events-none absolute right-0 top-9 z-10 hidden whitespace-nowrap rounded
                    border border-edge bg-panel px-2 py-1 text-[10px] text-slate-300 group-hover:block"

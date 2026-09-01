@@ -188,3 +188,14 @@ export function IconDownload(props) {
     </Svg>
   );
 }
+
+/** Intel: a clipboard of objectives. The phone HUD's way back to the panels. */
+export function IconIntel(props) {
+  return (
+    <Svg {...props}>
+      <path d="M9 4.5H7.5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-12a2 2 0 0 0-2-2H15" />
+      <rect x="9" y="2.8" width="6" height="3.4" rx="1" />
+      <path d="M8.8 11.5l1.6 1.6 3.2-3.2M8.8 16.3h6.4" />
+    </Svg>
+  );
+}

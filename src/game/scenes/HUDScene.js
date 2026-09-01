@@ -10,6 +10,13 @@
 
 import Phaser from 'phaser';
 import eventManager, { EVENTS } from '../systems/EventManager.js';
+import touchInput from '../systems/TouchInput.js';
+
+/**
+ * Keyboard key -> the on-screen button that does the same job. The prompt has to
+ * name something the player can actually see; "[E]" on a phone names nothing.
+ */
+const TOUCH_LABEL = { E: 'USE', SPACE: 'TALK', F: 'PLANT', H: 'LIGHTS' };
 
 export class HUDScene extends Phaser.Scene {
   constructor() {
@@ -80,8 +87,14 @@ export class HUDScene extends Phaser.Scene {
       this.promptBg.clear();
       return;
     }
-    const label = payload.key ? `[${payload.key}]  ${payload.label}` : payload.label;
-    this.promptText.setText(label);
+    const key = payload.key
+      ? (touchInput.isActive() ? TOUCH_LABEL[payload.key] || payload.key : payload.key)
+      : null;
+    // "(E to abort)" is baked into the scene's own label text, so swap that too.
+    const body = touchInput.isActive()
+      ? String(payload.label).replace(/\(E to abort\)/i, '(tap Use to abort)')
+      : payload.label;
+    this.promptText.setText(key ? `[${key}]  ${body}` : body);
 
     const w = this.promptText.width + 22;
     const h = 26;
